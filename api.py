@@ -1,22 +1,25 @@
 """
-api.py canlı altın ve döviz verilerini ücretsiz API'lerden çeker.
+api.py Canlı altın ve döviz verilerini API'lerden çeker.
 """
+
 import requests
 from datetime import datetime
 
-
-BASE_URL = "https://api.frankfurter.dev/v1/latest"
+from config import (
+    FRANKFURTER_API_URL,
+    REQUEST_TIMEOUT,
+)
 
 
 def get_exchange_rates():
     try:
         response = requests.get(
-            BASE_URL,
+            FRANKFURTER_API_URL,
             params={
                 "base": "TRY",
                 "symbols": "USD,EUR,GBP"
             },
-            timeout=10
+            timeout=REQUEST_TIMEOUT
         )
 
         response.raise_for_status()
@@ -37,6 +40,7 @@ def get_exchange_rates():
     except requests.exceptions.RequestException as e:
         print(f"API Hatası: {e}")
         return None
-    
+
+
 if __name__ == "__main__":
     print(get_exchange_rates())
