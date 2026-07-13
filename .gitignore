@@ -6,6 +6,9 @@ __pycache__/
 *.py[cod]
 *.pyo
 
+# Database
+market_data.db
+
 # macOS
 .DS_Store
 
@@ -17,6 +20,3 @@ __pycache__/
 
 # Streamlit
 .streamlit/
-
-# SQLite database (istersen bunu şimdilik yorum satırı bırakabiliriz)
-# data/finance.db
