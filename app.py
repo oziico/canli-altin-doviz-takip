@@ -14,51 +14,56 @@ st.set_page_config(
 )
 
 def show_statistics(df, column, suffix):
-
     maximum = df[column].max()
     minimum = df[column].min()
     average = df[column].mean()
 
-    col1, col2, col3 = st.columns([1,1,1], gap="medium")
+    col1, col2, col3 = st.columns([1, 1, 1], gap="medium")
+
+    # Dövizler için 4 basamak, altın için 2 basamak formatı
+    precision = ".4f" if column in ['usd_try', 'eur_try', 'gbp_try'] else ".2f"
+    
+    val_max = f"{maximum:{precision}} {suffix}"
+    val_min = f"{minimum:{precision}} {suffix}"
+    val_avg = f"{average:{precision}} {suffix}"
+
+    # padding değerini biraz azalttık ve içeriğin dikeyde eşit boşluklarla yayılmasını (space-evenly) sağladık
+    card_style = (
+        "display: flex; "
+        "flex-direction: column; "
+        "justify-content: space-evenly; "
+        "align-items: center; "
+        "height: 110px; "
+        "border-radius: 12px; "
+        "padding: 16px 12px; "
+        "text-align: center; "
+        "box-sizing: border-box;"
+    )
 
     with col1:
         st.markdown(f"""
-        <div style="
-            background:#1E293B;
-            padding:12px 18px;
-            border-radius:12px;
-            border-left:5px solid #FFD700;
-        ">
-            <h5 style="margin:0;">🕒 Son Güncelleme</h5>
-            <h3 style="margin-top:10px;">{formatted_time}</h3>
+        <div style="{card_style} background: #1e352f;">
+            <h5 style="margin: 0; color: #4ade80; font-size: 14px; font-weight: 600; line-height: 1.2;">📈 En Yüksek</h5>
+            <h3 style="margin: 0; font-size: 18px; font-weight: bold; color: #f1f5f9; line-height: 1.2;">{val_max}</h3>
         </div>
         """, unsafe_allow_html=True)
 
     with col2:
         st.markdown(f"""
-        <div style="
-            background:#3b1d1d;
-            padding:18px;
-            border-radius:12px;
-            text-align:center;
-        ">
-        <h5>⬇️ En Düşük</h5>
-        <h3>{minimum:.2f} {suffix}</h3>
+        <div style="{card_style} background: #3b1d1d;">
+            <h5 style="margin: 0; color: #f87171; font-size: 14px; font-weight: 600; line-height: 1.2;">⬇️ En Düşük</h5>
+            <h3 style="margin: 0; font-size: 18px; font-weight: bold; color: #f1f5f9; line-height: 1.2;">{val_min}</h3>
         </div>
         """, unsafe_allow_html=True)
 
     with col3:
         st.markdown(f"""
-        <div style="
-            background:#1c3154;
-            padding:18px;
-            border-radius:12px;
-            text-align:center;
-        ">
-        <h5 style="margin:0 0 12px 0;">📊 Ortalama</h5>
-        <h3 style="margin:0;">{average:.2f} {suffix}</h3>
+        <div style="{card_style} background: #1c3154;">
+            <h5 style="margin: 0; color: #60a5fa; font-size: 14px; font-weight: 600; line-height: 1.2;">📊 Ortalama</h5>
+            <h3 style="margin: 0; font-size: 18px; font-weight: bold; color: #f1f5f9; line-height: 1.2;">{val_avg}</h3>
         </div>
         """, unsafe_allow_html=True)
+
 st.markdown("""
 <style>
 
@@ -96,27 +101,48 @@ if latest is None:
     st.warning("Henüz veritabanında veri bulunmuyor.")
     st.stop()
 
-col1, col2 = st.columns([5,1])
+# Yenileme butonu tetikleyicisi (Görünmez bir Streamlit butonu)
+# Eğer HTML içindeki buton tıklanırsa bu formu gönderip sayfayı yenileyecek
+if "refresh" in st.query_params:
+    st.query_params.clear()
+    st.cache_data.clear()
+    st.rerun()
 
-with col1:
-    st.markdown(f"""
-    <div style="
-        background:#1E293B;
-        padding:18px;
-        border-radius:15px;
-        border-left:6px solid #FFD700;
-    ">
-        <h4 style="margin-bottom:5px;">🕒 Son Güncelleme</h4>
-        <h2>{formatted_time}</h2>
+# Tek parça, ince ve butonla birleşik Son Güncelleme Satırı
+st.markdown(f"""
+<div style="
+    background: #1E293B;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border-left: 4px solid #FFD700;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    box-sizing: border-box;
+">
+    <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 14px; color: #94A3B8; margin: 0;">🕒 Son Güncelleme:</span>
+        <strong style="font-size: 14px; color: #F1F5F9; margin: 0;">{formatted_time}</strong>
     </div>
-    """, unsafe_allow_html=True)
+    <a href="?refresh=true" target="_self" style="
+        text-decoration: none;
+        background: #334155;
+        color: #F1F5F9;
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: background 0.2s;
+    " onmouseover="this.style.background='#475569'" onmouseout="this.style.background='#334155'">
+        🔄 Yenile
+    </a>
+</div>
+""", unsafe_allow_html=True)
 
-with col2:
-    st.write("")
-    st.write("")
-    if st.button("🔄 Yenile"):
-        st.cache_data.clear()
-        st.rerun()
 
 col1, col2 = st.columns(2)
 
