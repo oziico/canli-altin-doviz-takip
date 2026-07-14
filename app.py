@@ -3,29 +3,120 @@ from datetime import datetime, timedelta
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
+
 
 from database import get_all_market_data, get_latest_market_data
 
 st.set_page_config(
-    page_title="Canlı Altın ve Döviz Takip",
+    page_title="Canlı Altın ve Döviz Takip Sistemi",
     page_icon="📈",
     layout="wide",
 )
 
-st_autorefresh(interval=30_000, key="refresh")
+def show_statistics(df, column, suffix):
+
+    maximum = df[column].max()
+    minimum = df[column].min()
+    average = df[column].mean()
+
+    col1, col2, col3 = st.columns([1,1,1], gap="medium")
+
+    with col1:
+        st.markdown(f"""
+        <div style="
+            background:#1E293B;
+            padding:12px 18px;
+            border-radius:12px;
+            border-left:5px solid #FFD700;
+        ">
+            <h5 style="margin:0;">🕒 Son Güncelleme</h5>
+            <h3 style="margin-top:10px;">{formatted_time}</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f"""
+        <div style="
+            background:#3b1d1d;
+            padding:18px;
+            border-radius:12px;
+            text-align:center;
+        ">
+        <h5>⬇️ En Düşük</h5>
+        <h3>{minimum:.2f} {suffix}</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        st.markdown(f"""
+        <div style="
+            background:#1c3154;
+            padding:18px;
+            border-radius:12px;
+            text-align:center;
+        ">
+        <h5 style="margin:0 0 12px 0;">📊 Ortalama</h5>
+        <h3 style="margin:0;">{average:.2f} {suffix}</h3>
+        </div>
+        """, unsafe_allow_html=True)
+st.markdown("""
+<style>
+
+.block-container{
+    padding-top:2rem;
+}
+
+}
+
+.gold-card{
+    background:#FFF9E8;
+}
+
+.currency-card{
+    background:#F4F8FF;
+}
+
+.vertical-divider{
+    border-left:1px solid #D8D8D8;
+    height:100%;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
 
 st.title("📈 Canlı Altın ve Döviz Takip Sistemi")
 st.caption("Canlı altın ve döviz verileri SQLite veritabanından okunmaktadır.")
 
 latest = get_latest_market_data()
 
+formatted_time = pd.to_datetime(latest["timestamp"]).strftime("%d.%m.%Y %H:%M:%S")
+
 if latest is None:
     st.warning("Henüz veritabanında veri bulunmuyor.")
     st.stop()
 
-st.subheader("📅 Son Güncelleme")
-st.write(latest["timestamp"])
+col1, col2 = st.columns([5,1])
+
+with col1:
+    st.markdown(f"""
+    <div style="
+        background:#1E293B;
+        padding:18px;
+        border-radius:15px;
+        border-left:6px solid #FFD700;
+    ">
+        <h4 style="margin-bottom:5px;">🕒 Son Güncelleme</h4>
+        <h2>{formatted_time}</h2>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col2:
+    st.write("")
+    st.write("")
+    if st.button("🔄 Yenile"):
+        st.cache_data.clear()
+        st.rerun()
 
 col1, col2 = st.columns(2)
 
@@ -74,42 +165,250 @@ if not df.empty:
     elif period == "Son 7 Gün":
         df = df[df["timestamp"] >= now - timedelta(days=7)]
 
-    col1, col2 = st.columns(2)
+    if df.empty:
+        st.info("Seçilen zaman aralığında veri bulunmuyor.")
+    else:
+        
+        st.header("🥇 Altın Analizi")
+        gold_col1, divider, gold_col2 = st.columns([1, 0.03, 1])
 
-    with col1:
+        with divider:
+            st.markdown(
+                """
+                <div style="
+                    border-left:1px solid rgba(255,255,255,0.20);
+                    height:620px;
+                    margin:auto;
+                "></div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-        st.subheader("📈 Gram Altın Grafiği")
+        with gold_col1:
 
-        fig = px.line(
-            df,
-            x="timestamp",
-            y="gold_gram",
-            markers=True,
-            title="Gram Altın (TL)",
-        )
+            st.markdown("### 📈 Gram Altın Grafiği")
 
-        st.plotly_chart(fig, use_container_width=True)
+            fig = px.line(
+                df,
+                x="timestamp",
+                y="gold_gram",
+                markers=True,
+                title="Gram Altın (TL)",
+                color_discrete_sequence=["gold"],
+            )
+            fig.update_traces(
+                line=dict(width=3),
+                marker=dict(size=8)
+            )
+            fig.add_annotation(
+                x=df["timestamp"].iloc[-1],
+                y=df["gold_gram"].iloc[-1],
+                text=f"{df['gold_gram'].iloc[-1]:.2f}",
+                showarrow=True,
+                arrowhead=2,
+                bgcolor="gold",
+            )
+            
+            fig.update_layout(
+                height=400,
+                template="plotly_dark",
+                margin=dict(l=10, r=10, t=40, b=10),
+            )
 
-    with col2:
+            st.plotly_chart(fig, width="stretch")
 
-        st.subheader("💵 USD / TRY Grafiği")
+            show_statistics(df, "gold_gram", "TL")
 
-        fig = px.line(
-            df,
-            x="timestamp",
-            y="usd_try",
-            markers=True,
-            title="USD / TRY",
-        )
+        with gold_col2:
 
-        st.plotly_chart(fig, use_container_width=True)
+            st.subheader("📈 Ons Altın Grafiği")
+
+            fig = px.line(
+                df,
+                x="timestamp",
+                y="gold_ounce",
+                markers=True,
+                title="Ons Altın ($)",
+                color_discrete_sequence=["orange"],
+            )
+
+            fig.update_traces(
+                line=dict(width=3),
+                marker=dict(size=8)
+            )
+
+            fig.update_layout(
+                height=400,
+                template="plotly_dark",
+                margin=dict(l=10, r=10, t=40, b=10),
+            )
+            
+            fig.add_annotation(
+                x=df["timestamp"].iloc[-1],
+                y=df["gold_ounce"].iloc[-1],
+                text=f"{df['gold_ounce'].iloc[-1]:.2f}",
+                showarrow=True,
+                arrowhead=2,
+                bgcolor="orange",
+            )
+
+            st.plotly_chart(fig, width="stretch")
+
+            show_statistics(df, "gold_ounce", "$")
+
+
+        st.divider()
+
+        # ============================
+        # DÖVİZ ANALİZİ
+        # ============================
+
+        st.header("💵 Döviz Analizi")
+        usd_col, divider1, eur_col, divider2, gbp_col = st.columns([1, 0.03, 1, 0.03, 1])
+
+        with divider1:
+            st.markdown(
+                """
+                <div style="
+                    border-left:1px solid rgba(255,255,255,0.20);
+                    height:620px;
+                    margin:auto;
+                "></div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        with divider2:
+            st.markdown(
+                """
+                <div style="
+                    border-left:1px solid rgba(255,255,255,0.20);
+                    height:620px;
+                    margin:auto;
+                "></div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        with usd_col:
+            st.subheader("💵 USD / TRY Grafiği")
+
+            fig = px.line(
+                df,
+                x="timestamp",
+                y="usd_try",
+                markers=True,
+                title="USD / TRY",
+                color_discrete_sequence=["green"],
+            )
+
+            fig.update_traces(
+                line=dict(width=3),
+                marker=dict(size=8)
+            )
+            
+            fig.update_layout(
+                height=400,
+                template="plotly_dark",
+                margin=dict(l=10,r=10,t=40,b=10),
+            )
+
+            fig.add_annotation(
+                x=df["timestamp"].iloc[-1],
+                y=df["usd_try"].iloc[-1],
+                text=f"{df['usd_try'].iloc[-1]:.4f}",
+                showarrow=True,
+                arrowhead=2,
+                bgcolor="green",
+            )
+
+            st.plotly_chart(fig, width="stretch")
+            show_statistics(df, "usd_try", "TL")
+
+        with eur_col:
+            st.subheader("💶 EUR / TRY Grafiği")
+
+            fig = px.line(
+                df,
+                x="timestamp",
+                y="eur_try",
+                markers=True,
+                title="EUR / TRY",
+                color_discrete_sequence=["royalblue"],
+            )
+
+            fig.update_traces(
+                line=dict(width=3),
+                marker=dict(size=8)
+            )
+            
+            fig.update_layout(
+                height=400,
+                template="plotly_dark",
+                margin=dict(l=10,r=10,t=40,b=10),
+            )
+
+            fig.add_annotation(
+                x=df["timestamp"].iloc[-1],
+                y=df["eur_try"].iloc[-1],
+                text=f"{df['eur_try'].iloc[-1]:.4f}",
+                showarrow=True,
+                arrowhead=2,
+                bgcolor="royalblue",
+            )
+            
+            st.plotly_chart(fig, width="stretch")
+            show_statistics(df, "eur_try", "TL")
+
+        with gbp_col:
+            st.subheader("💷 GBP / TRY Grafiği")
+
+            fig = px.line(
+                df,
+                x="timestamp",
+                y="gbp_try",
+                markers=True,
+                title="GBP / TRY",
+                color_discrete_sequence=["purple"],
+            )
+
+            fig.update_traces(
+                line=dict(width=3),
+                marker=dict(size=8)
+            )
+            
+            fig.update_layout(
+                height=400,
+                template="plotly_dark",
+                margin=dict(l=10,r=10,t=40,b=10),
+            )
+
+            fig.add_annotation(
+                x=df["timestamp"].iloc[-1],
+                y=df["gbp_try"].iloc[-1],
+                text=f"{df['gbp_try'].iloc[-1]:.4f}",
+                showarrow=True,
+                arrowhead=2,
+                bgcolor="purple",
+            )
+
+            st.plotly_chart(fig, width="stretch")
+            show_statistics(df, "gbp_try", "TL")
+
 
 st.divider()
 
 st.subheader("📋 Veritabanındaki Tüm Kayıtlar")
-st.dataframe(df, use_container_width=True)
 
-csv = df.to_csv(index=False).encode("utf-8")
+# Tablo için en yeni kayıt üstte
+df_table = df.sort_values("timestamp", ascending=False)
+
+st.dataframe(
+    df_table,
+    width="stretch",
+)
+
+csv = df_table.to_csv(index=False).encode("utf-8")
 
 st.download_button(
     label="📥 Verileri CSV Olarak İndir",

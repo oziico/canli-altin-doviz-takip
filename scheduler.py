@@ -39,6 +39,10 @@ def start_scheduler() -> None:
     """
     create_table()
 
+    # İlk veriyi hemen kaydet
+    logger.info("İlk piyasa verisi alınıyor...")
+    update_market_data()
+
     scheduler = BackgroundScheduler()
 
     scheduler.add_job(
