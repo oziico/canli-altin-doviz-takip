@@ -42,7 +42,7 @@ st.caption("Profesyonel Finansal Analiz ve Takip Paneli (SQLite Live Data)")
 
 # ==================== GERÇEK CANLI KONTROL SİSTEMİ (FRAGMENT) ====================
 # Bu fonksiyon arka planda her 10 saniyede bir sessizce çalışır. 
-# Sayfayı çökertmez ve bağlantıyı koparmaz.
+# Sayfayı çökertmez ve macOS işletim sisteminde segmentation fault hatası verdirmez.
 @st.fragment(run_every="10s")
 def live_update_and_alarm_check():
     latest_data = get_latest_market_data()
@@ -73,11 +73,28 @@ def live_update_and_alarm_check():
             
         if triggered:
             mark_alert_as_triggered(alert["id"])
+            
+            # 1. TAMAMEN TARAYICI TABANLI SES OYNATICI (Sıfır Çökme Riski)
+            # Python ses kütüphanelerini asla kullanmaz, tarayıcı arka planda sesi çalar.
+            st.html(
+                """
+                <audio autoplay>
+                    <source src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg" type="audio/ogg">
+                </audio>
+                """
+            )
+            
+            # 2. Canlı Toast Bildirimi (Ekranın sağ altında dikkat çeker)
             st.toast(f"🚨 ALARM TETİKLENDİ: {name_map_local[metric_key]} fiyatı {current_value:.4f} değerine ulaştı!", icon="🔔")
+            
+            # 3. Sayfa içi görsel bildirim kutuları
             if condition == ">=":
                 st.success(f"🔔 **Fiyat Alarmı:** {name_map_local[metric_key]} hedeflediğiniz **{target:.4f}** değerinin üzerine çıktı! Güncel Fiyat: **{current_value:.4f}**")
             else:
                 st.error(f"🔔 **Fiyat Alarmı:** {name_map_local[metric_key]} hedeflediğiniz **{target:.4f}** değerinin altına indi! Güncel Fiyat: **{current_value:.4f}**")
+            
+            # Sayfayı güvenli bir şekilde yenile
+            st.rerun()
 
 # Arka planda çalışan canlı alarm mekanizmasını başlatıyoruz
 live_update_and_alarm_check()

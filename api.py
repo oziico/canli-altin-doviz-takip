@@ -4,11 +4,9 @@ api.py Canlı altın ve döviz verilerini API'lerden çeker.
 
 from datetime import datetime
 import logging
-
 import requests
 
 from config import (
-    FRANKFURTER_API_URL,
     GOLD_API_URL,
     REQUEST_TIMEOUT,
     OUNCE_TO_GRAM,
@@ -22,52 +20,36 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Frankfurter yerine anlık güncellenen ücretsiz döviz API'si kullanıyoruz
+ANLIK_DOVIZ_API_URL = "https://open.er-api.com/v6/latest/USD"
+
 
 def get_exchange_rates() -> dict | None:
-
     try:
+        # Tek bir istekte tüm dünyadaki kurların USD karşılığını çekiyoruz
         response = requests.get(
-            FRANKFURTER_API_URL,
-            params={
-                "from": "USD",
-                "to": "TRY,EUR,GBP",
-            },
+            ANLIK_DOVIZ_API_URL,
             timeout=REQUEST_TIMEOUT,
         )
-
         response.raise_for_status()
-
         data = response.json()
 
-        usd_try = data["rates"]["TRY"]
+        # USD bazlı gelen oranları TRY bazına çeviriyoruz
+        rates = data.get("rates", {})
+        usd_try = rates.get("TRY")
+        
+        if not usd_try:
+            logger.error("Döviz verilerinde TRY bulunamadı.")
+            return None
 
-        response = requests.get(
-            FRANKFURTER_API_URL,
-            params={
-                "from": "EUR",
-                "to": "TRY",
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
+        # EUR/TRY ve GBP/TRY çapraz kurlarını hesaplıyoruz
+        usd_eur = rates.get("EUR", 1)
+        usd_gbp = rates.get("GBP", 1)
 
-        response.raise_for_status()
+        eur_try = usd_try / usd_eur
+        gbp_try = usd_try / usd_gbp
 
-        eur_try = response.json()["rates"]["TRY"]
-
-        response = requests.get(
-            FRANKFURTER_API_URL,
-            params={
-                "from": "GBP",
-                "to": "TRY",
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-
-        response.raise_for_status()
-
-        gbp_try = response.json()["rates"]["TRY"]
-
-        logger.info("Döviz verileri başarıyla alındı.")
+        logger.info("Anlık döviz verileri başarıyla güncellendi.")
 
         return {
             "usd_try": round(usd_try, 4),
@@ -77,32 +59,26 @@ def get_exchange_rates() -> dict | None:
         }
 
     except requests.exceptions.RequestException as error:
-        logger.error(f"Döviz API Hatası: {error}")
+        logger.error(f"Döviz API Hatası (Anlık): {error}")
         return None
 
 
 def calculate_gram_gold(ounce_price: float, usd_try: float) -> float:
     gram_gold = (ounce_price * usd_try) / OUNCE_TO_GRAM
-
     return round(gram_gold, 2)
 
 
 def get_gold_price() -> float | None:
-
     try:
         response = requests.get(
             GOLD_API_URL,
             timeout=REQUEST_TIMEOUT,
         )
-
         response.raise_for_status()
-
         data = response.json()
-
         gold_price = float(data["price"])
 
         logger.info("Ons altın fiyatı başarıyla alındı.")
-
         return gold_price
 
     except requests.exceptions.RequestException as error:
@@ -111,7 +87,6 @@ def get_gold_price() -> float | None:
 
 
 def get_market_data() -> dict | None:
-    
     exchange_rates = get_exchange_rates()
     ounce_price = get_gold_price()
 
@@ -131,12 +106,10 @@ def get_market_data() -> dict | None:
     }
 
     logger.info("Piyasa verileri başarıyla oluşturuldu.")
-
     return market_data
 
 
 if __name__ == "__main__":
     market_data = get_market_data()
-
     if market_data:
         print(market_data)
