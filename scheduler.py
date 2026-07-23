@@ -42,11 +42,11 @@ def check_alerts() -> None:
 
         triggered = False
 
-        if condition == ">=":
-            triggered = current >= target
+        if condition == ">":
+            triggered = current > target
 
-        elif condition == "<=":
-            triggered = current <= target
+        elif condition == "<":
+            triggered = current < target
 
         if triggered:
 

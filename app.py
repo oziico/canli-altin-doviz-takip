@@ -1,11 +1,13 @@
+import platform
 import os
-os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
+
+if platform.system() == "Darwin":
+    os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
 
 from datetime import datetime, timedelta
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-import urllib.parse
 
 from database import (
     get_all_market_data,
@@ -14,6 +16,8 @@ from database import (
     get_active_alerts,
     delete_alert,
     get_alert_history,
+    alert_exists,
+    get_last_triggered_alert,
 )
 
 st.set_page_config(
@@ -36,6 +40,228 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+from streamlit_autorefresh import st_autorefresh
+import streamlit.components.v1 as components
+
+st_autorefresh(
+    interval=10000,
+    key="datarefresh"
+)
+
+# --------------------------------------------------
+# ALARM BİLDİRİM SİSTEMİ
+# --------------------------------------------------
+
+if "dismissed_alert_ids" not in st.session_state:
+    st.session_state.dismissed_alert_ids = set()
+
+if "last_sound_alert_id" not in st.session_state:
+    st.session_state.last_sound_alert_id = None
+
+
+last_alert = get_last_triggered_alert()
+
+alert_name_map = {
+    "usd_try": "USD / TRY",
+    "eur_try": "EUR / TRY",
+    "gbp_try": "GBP / TRY",
+    "gold_ounce": "Ons Altın ($)",
+    "gold_gram": "Gram Altın (TL)",
+}
+
+
+show_alert = (
+    last_alert is not None
+    and last_alert["id"] not in st.session_state.dismissed_alert_ids
+)
+
+
+if show_alert:
+
+    alert_id = last_alert["id"]
+
+    alert_name = alert_name_map.get(
+        last_alert["metric"],
+        last_alert["metric"]
+    )
+
+    # Alarm ilk kez görünüyorsa bip sesi çal
+    if st.session_state.last_sound_alert_id != alert_id:
+
+        components.html(
+            """
+            <script>
+            try {
+                const AudioContextClass =
+                    window.AudioContext || window.webkitAudioContext;
+
+                const audioCtx = new AudioContextClass();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+
+                oscillator.type = "sine";
+
+                oscillator.frequency.setValueAtTime(
+                    880,
+                    audioCtx.currentTime
+                );
+
+                gainNode.gain.setValueAtTime(
+                    0.18,
+                    audioCtx.currentTime
+                );
+
+                gainNode.gain.exponentialRampToValueAtTime(
+                    0.001,
+                    audioCtx.currentTime + 0.45
+                );
+
+                oscillator.start();
+
+                oscillator.stop(
+                    audioCtx.currentTime + 0.45
+                );
+
+            } catch (e) {
+                console.log("Alarm sesi çalınamadı:", e);
+            }
+            </script>
+            """,
+            height=0,
+        )
+
+        st.session_state.last_sound_alert_id = alert_id
+
+
+    # Alarm kartının CSS görünümü
+    st.markdown(
+        """
+<style>
+
+.alarm-wrapper {
+
+    border: 1px solid rgba(239, 68, 68, 0.55);
+
+    border-left: 5px solid #ef4444;
+
+    border-radius: 14px;
+
+    padding: 16px 18px;
+
+    margin-bottom: 10px;
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(127, 29, 29, 0.18),
+            rgba(17, 24, 39, 0.95)
+        );
+
+    box-shadow:
+        0 10px 30px rgba(0, 0, 0, 0.30);
+}
+
+
+.alarm-header {
+
+    color: #fca5a5;
+
+    font-size: 18px;
+
+    font-weight: 700;
+
+    margin-bottom: 8px;
+}
+
+
+.alarm-asset {
+
+    color: #f8fafc;
+
+    font-size: 16px;
+
+    font-weight: 700;
+
+    margin-bottom: 8px;
+}
+
+
+.alarm-info {
+
+    color: #cbd5e1;
+
+    font-size: 14px;
+
+    line-height: 1.7;
+}
+
+
+.alarm-current {
+
+    color: #ffffff;
+
+    font-weight: 700;
+}
+
+
+.alarm-target {
+
+    color: #fbbf24;
+
+    font-weight: 700;
+}
+
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+    alert_col, close_col = st.columns(
+        [12, 1],
+        vertical_alignment="top"
+    )
+
+with alert_col:
+    alarm_html = (
+        '<div class="alarm-wrapper">'
+        '<div class="alarm-header">🚨 Fiyat Alarmı Tetiklendi</div>'
+        f'<div class="alarm-asset">{alert_name}</div>'
+        '<div class="alarm-info">'
+        'Güncel fiyat: '
+        f'<span class="alarm-current">{last_alert["current_value"]:.4f}</span>'
+        '<br>'
+        'Alarm koşulu: '
+        f'<span class="alarm-target">{last_alert["condition"]} '
+        f'{last_alert["target_value"]:.4f}</span>'
+        '</div>'
+        '</div>'
+    )
+
+    st.markdown(
+        alarm_html,
+        unsafe_allow_html=True
+    )
+
+
+    with close_col:
+
+        if st.button(
+            "✕",
+            key=f"dismiss_alert_{alert_id}",
+            help="Alarm bildirimini kapat",
+            use_container_width=True,
+        ):
+
+            st.session_state.dismissed_alert_ids.add(
+                alert_id
+            )
+
+            st.rerun()
+                
 st.title("📈 Canlı Altın ve Döviz Takip Sistemi")
 st.caption("Profesyonel Finansal Analiz ve Takip Paneli (SQLite Live Data)")
 
@@ -65,7 +291,7 @@ for col in metrics:
         v_prev = df_24h[col].iloc[0]
         pct = ((v_now - v_prev) / v_prev) * 100 if v_prev > 0 else 0.0
         pct_returns = df_24h[col].pct_change().dropna()
-        vol = 0
+        vol = pct_returns.std() * 100
     else:
         v_prev = v_now
         pct = 0.0
@@ -107,15 +333,34 @@ alert_target_str = st.sidebar.text_input(
 
 alert_condition = st.sidebar.selectbox(
     "Koşul", 
-    options=[">=", "<="], 
-    format_func=lambda x: "Eşit veya Büyükse (>=)" if x == ">=" else "Eşit veya Küçükse (<=)"
+    options=[">", "<"], 
+    format_func=lambda x: "Büyükse (>)" if x == ">" else "Küçükse (<)"
 )
 
-if st.sidebar.button("Alarm Kur", width="stretch"):
+if st.sidebar.button("Alarm Kur", use_container_width=True):
     try:
         alert_target = float(alert_target_str)
-        insert_alert(alert_metric, alert_condition, alert_target)
-        st.sidebar.success(f"Alarm kuruldu: {name_map[alert_metric]} {alert_condition} {alert_target:.4f}")
+
+        is_already_passed = False
+        if alert_condition == ">" and current_asset_value > alert_target:
+            is_already_passed = True
+        elif alert_condition == "<" and current_asset_value < alert_target:
+            is_already_passed = True
+
+        if is_already_passed:
+            st.sidebar.warning(
+                f"⚠️ Mevcut fiyat ({current_asset_value:.4f}) zaten girdiğiniz hedeften "
+                f"{'büyük' if alert_condition == '>' else 'küçük'}. Alarm kurulamaz!"
+            )
+        else:
+            if alert_exists(alert_metric, alert_condition, alert_target):
+                st.sidebar.warning("⚠️ Bu alarm zaten aktif.")
+            else:
+                insert_alert(alert_metric, alert_condition, alert_target)
+                st.sidebar.success(
+                    f"✅ Alarm kuruldu: {name_map[alert_metric]} {alert_condition} {alert_target:.4f}"
+                )
+
     except ValueError:
         st.sidebar.error("Lütfen geçerli bir sayı girin!")
 
@@ -140,7 +385,10 @@ if not history:
 else:
     for item in history[:10]:
         st.sidebar.write(f"🔔 {name_map[item['metric']]}")
-        st.sidebar.caption(f"{item['current_value']:.4f}")
+        st.sidebar.caption(
+            f"{item['current_value']:.4f} {item['condition']} {item['target_value']:.4f}"
+        )
+        st.sidebar.caption(item["triggered_at"])
 
 top_col1, top_col2, top_col3 = st.columns(3)
 
@@ -182,7 +430,7 @@ st.markdown(f"""
     border-radius: 8px;
     border: 1px solid #1F2937;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
     margin-top: 15px;
     margin-bottom: 25px;
@@ -190,10 +438,6 @@ st.markdown(f"""
     <div style="display: flex; align-items: center; gap: 8px;">
         <span style="font-size: 13px; color: #9BD; margin: 0;">🕒 Son Veri Girişi:</span>
         <strong style="font-size: 13px; color: #F1F5F9; margin: 0;">{formatted_time}</strong>
-    </div>
-    <div style="display: flex; align-items: center; gap: 6px;">
-        <span style="width: 8px; height: 8px; background-color: #10B981; border-radius: 50%; display: inline-block;"></span>
-        <span style="font-size: 13px; color: #10B981; font-weight: bold;">API BAĞLANTISI AKTİF</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -344,14 +588,15 @@ else:
             color_discrete_sequence=["gold"],
         )
         fig.update_traces(line=dict(width=3), marker=dict(size=8))
-        #fig.add_annotation(
-        #    x=df["timestamp"].iloc[-1],
-        #    y=df["gold_gram"].iloc[-1],
-        #    text=f"{df['gold_gram'].iloc[-1]:.2f}",
-        #    showarrow=True,
-        #    arrowhead=2,
-         #   bgcolor="gold",
-        #)
+        if not df.empty:
+            fig.add_annotation(
+                x=df["timestamp"].iloc[-1],
+                y=df["gold_gram"].iloc[-1],
+                text=f"{df['gold_gram'].iloc[-1]:.2f}",
+                showarrow=True,
+                arrowhead=2,
+                bgcolor="gold",
+            )
         fig.update_layout(
             height=400,
             template="plotly_dark",
@@ -377,14 +622,15 @@ else:
             margin=dict(l=10, r=10, t=40, b=10),
         )
         
-        #fig.add_annotation(
-        #    x=df["timestamp"].iloc[-1],
-        #    y=df["gold_ounce"].iloc[-1],
-        #    text=f"{df['gold_ounce'].iloc[-1]:.2f}",
-        #    showarrow=True,
-        #    arrowhead=2,
-        #    bgcolor="orange",
-        #)
+        if not df.empty:
+            fig.add_annotation(
+                x=df["timestamp"].iloc[-1],
+                y=df["gold_ounce"].iloc[-1],
+                text=f"{df['gold_ounce'].iloc[-1]:.2f}",
+                showarrow=True,
+                arrowhead=2,
+                bgcolor="orange",
+            )
         st.plotly_chart(fig, width="stretch")
         show_statistics(df, "gold_ounce", "$")
 
@@ -433,14 +679,15 @@ else:
             template="plotly_dark",
             margin=dict(l=10, r=10, t=40, b=10),
         )
-        #fig.add_annotation(
-        #    x=df["timestamp"].iloc[-1],
-        #    y=df["usd_try"].iloc[-1],
-        #    text=f"{df['usd_try'].iloc[-1]:.4f}",
-        #    showarrow=True,
-        #    arrowhead=2,
-        #    bgcolor="green",
-        #)
+        if not df.empty:
+            fig.add_annotation(
+                x=df["timestamp"].iloc[-1],
+                y=df["usd_try"].iloc[-1],
+                text=f"{df['usd_try'].iloc[-1]:.4f}",
+                showarrow=True,
+                arrowhead=2,
+                bgcolor="green",
+            )
         st.plotly_chart(fig, width="stretch")
         show_statistics(df, "usd_try", "TL")
 
@@ -460,14 +707,15 @@ else:
             template="plotly_dark",
             margin=dict(l=10, r=10, t=40, b=10),
         )
-        #fig.add_annotation(
-        #    x=df["timestamp"].iloc[-1],
-        #    text=f"{df['eur_try'].iloc[-1]:.4f}",
-        #    y=df["eur_try"].iloc[-1],
-        #    showarrow=True,
-        #    arrowhead=2,
-        #    bgcolor="royalblue",
-        #)
+        if not df.empty:
+            fig.add_annotation(
+                x=df["timestamp"].iloc[-1],
+                y=df["eur_try"].iloc[-1],
+                text=f"{df['eur_try'].iloc[-1]:.4f}",
+                showarrow=True,
+                arrowhead=2,
+                bgcolor="royalblue",
+            )
         st.plotly_chart(fig, width="stretch")
         show_statistics(df, "eur_try", "TL")
 
@@ -487,14 +735,15 @@ else:
             template="plotly_dark",
             margin=dict(l=10, r=10, t=40, b=10),
         )
-        #fig.add_annotation(
-        #    x=df["timestamp"].iloc[-1],
-        #    y=df["gbp_try"].iloc[-1],
-        #    text=f"{df['gbp_try'].iloc[-1]:.4f}",
-        #    showarrow=True,
-        #    arrowhead=2,
-        #    bgcolor="purple",
-        #)
+        if not df.empty:
+            fig.add_annotation(
+                x=df["timestamp"].iloc[-1],
+                y=df["gbp_try"].iloc[-1],
+                text=f"{df['gbp_try'].iloc[-1]:.4f}",
+                showarrow=True,
+                arrowhead=2,
+                bgcolor="purple",
+            )
         st.plotly_chart(fig, width="stretch")
         show_statistics(df, "gbp_try", "TL")
 
@@ -509,28 +758,12 @@ temp_df = df_table.copy()
 if 'timestamp' in temp_df.columns:
     temp_df['timestamp'] = temp_df['timestamp'].astype(str)
 
-csv_string = temp_df.to_csv(index=False)
-csv_encoded = urllib.parse.quote(csv_string)
-data_uri = f"data:text/csv;charset=utf-8-sig,{csv_encoded}"
-st.markdown(f"""
-<a href="{data_uri}" download="market_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv" style="text-decoration: none;">
-    <div style="
-        background-color: #334155;
-        color: #F1F5F9;
-        padding: 10px 18px;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: 500;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        width: auto;
-        text-align: center;
-        transition: background 0.2s;
-        border: none;
-        cursor: pointer;
-    " onmouseover="this.style.background='#475569'" onmouseout="this.style.background='#334155'">
-        📥 Verileri CSV Olarak İndir
-    </div>
-</a>
-""", unsafe_allow_html=True)
+csv_data = temp_df.to_csv(index=False).encode("utf-8-sig")
+
+st.download_button(
+    label="📥 Verileri CSV Olarak İndir",
+    data=csv_data,
+    file_name=f"market_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+    mime="text/csv",
+    use_container_width=False,
+)

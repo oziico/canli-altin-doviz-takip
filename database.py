@@ -179,6 +179,25 @@ def get_active_alerts() -> list[dict]:
 
     return [dict(row) for row in rows]
 
+def alert_exists(metric: str, condition: str, target_value: float) -> bool:
+    connection = create_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT 1
+        FROM alerts
+        WHERE metric = ?
+          AND condition = ?
+          AND target_value = ?
+          AND is_triggered = 0
+        LIMIT 1
+    """, (metric, condition, target_value))
+
+    exists = cursor.fetchone() is not None
+
+    connection.close()
+
+    return exists
 
 def get_all_alerts() -> list[dict]:
     connection = create_connection()
