@@ -1,9 +1,15 @@
 import logging
 import sqlite3
-
+from datetime import datetime
 from api import get_market_data
 
 DATABASE_NAME = "market_data.db"
+
+def create_connection() -> sqlite3.Connection:
+    return sqlite3.connect(
+        DATABASE_NAME,
+        check_same_thread=False
+    )
 
 logging.basicConfig(
     level=logging.INFO,
@@ -12,9 +18,6 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-
-def create_connection() -> sqlite3.Connection:
-    return sqlite3.connect(DATABASE_NAME)
 
 
 def create_table() -> None:
@@ -34,22 +37,33 @@ def create_table() -> None:
     """)
 
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS alerts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            metric TEXT NOT NULL,
-            condition TEXT NOT NULL,
-            target_value REAL NOT NULL,
-            is_triggered INTEGER DEFAULT 0
-        )
-    """)
+    CREATE TABLE IF NOT EXISTS alerts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        metric TEXT NOT NULL,
+        condition TEXT NOT NULL,
+        target_value REAL NOT NULL,
+        is_triggered INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL
+    )
+""")
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS alert_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        alert_id INTEGER NOT NULL,
+        metric TEXT NOT NULL,
+        condition TEXT NOT NULL,
+        target_value REAL NOT NULL,
+        current_value REAL NOT NULL,
+        triggered_at TEXT NOT NULL
+    )
+""")
 
     connection.commit()
     connection.close()
 
     logger.info("Veritabanı tabloları hazır.")
 
-
-# Uygulama veya scheduler import ettiğinde tabloların eksiksiz kurulduğundan emin oluyoruz.
 create_table()
 
 
@@ -129,9 +143,20 @@ def insert_alert(metric: str, condition: str, target_value: float) -> None:
     cursor = connection.cursor()
 
     cursor.execute("""
-        INSERT INTO alerts (metric, condition, target_value, is_triggered)
-        VALUES (?, ?, ?, 0)
-    """, (metric, condition, target_value))
+    INSERT INTO alerts (
+        metric,
+        condition,
+        target_value,
+        is_triggered,
+        created_at
+    )
+    VALUES (?, ?, ?, 0, ?)
+""", (
+    metric,
+    condition,
+    target_value,
+    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+))
 
     connection.commit()
     connection.close()
@@ -199,6 +224,94 @@ def delete_alert(alert_id: int) -> None:
     connection.commit()
     connection.close()
 
+
+def insert_alert_history(
+    alert_id: int,
+    metric: str,
+    condition: str,
+    target_value: float,
+    current_value: float,
+) -> None:
+
+    connection = create_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        INSERT INTO alert_history (
+            alert_id,
+            metric,
+            condition,
+            target_value,
+            current_value,
+            triggered_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        alert_id,
+        metric,
+        condition,
+        target_value,
+        current_value,
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    ))
+
+    connection.commit()
+    connection.close()
+
+
+def get_alert_history() -> list[dict]:
+
+    connection = create_connection()
+    connection.row_factory = sqlite3.Row
+
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT *
+        FROM alert_history
+        ORDER BY triggered_at DESC
+    """)
+
+    rows = cursor.fetchall()
+
+    connection.close()
+
+    return [dict(row) for row in rows]
+
+def get_last_triggered_alert() -> dict | None:
+
+    connection = create_connection()
+    connection.row_factory = sqlite3.Row
+
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT *
+        FROM alert_history
+        ORDER BY id DESC
+        LIMIT 1
+    """)
+
+    row = cursor.fetchone()
+
+    connection.close()
+
+    if row is None:
+        return None
+
+    return dict(row)
+
+def get_current_value(metric: str) -> float | None:
+    """
+    İstenen varlığın en güncel değerini döndürür.
+    """
+
+    latest = get_latest_market_data()
+
+    if latest is None:
+        return None
+
+    return latest.get(metric)
 
 if __name__ == "__main__":
     market_data = get_market_data()

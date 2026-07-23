@@ -1,7 +1,3 @@
-"""
-api.py Canlı altın ve döviz verilerini API'lerden çeker.
-"""
-
 from datetime import datetime
 import logging
 import requests
@@ -12,7 +8,6 @@ from config import (
     OUNCE_TO_GRAM,
 )
 
-# Logger ayarları
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -20,13 +15,11 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# Frankfurter yerine anlık güncellenen ücretsiz döviz API'si kullanıyoruz
 ANLIK_DOVIZ_API_URL = "https://open.er-api.com/v6/latest/USD"
 
 
 def get_exchange_rates() -> dict | None:
     try:
-        # Tek bir istekte tüm dünyadaki kurların USD karşılığını çekiyoruz
         response = requests.get(
             ANLIK_DOVIZ_API_URL,
             timeout=REQUEST_TIMEOUT,
@@ -34,7 +27,6 @@ def get_exchange_rates() -> dict | None:
         response.raise_for_status()
         data = response.json()
 
-        # USD bazlı gelen oranları TRY bazına çeviriyoruz
         rates = data.get("rates", {})
         usd_try = rates.get("TRY")
         
@@ -42,7 +34,6 @@ def get_exchange_rates() -> dict | None:
             logger.error("Döviz verilerinde TRY bulunamadı.")
             return None
 
-        # EUR/TRY ve GBP/TRY çapraz kurlarını hesaplıyoruz
         usd_eur = rates.get("EUR", 1)
         usd_gbp = rates.get("GBP", 1)
 
