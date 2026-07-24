@@ -92,7 +92,7 @@ def start_scheduler() -> None:
     scheduler.add_job(
         update_market_data,
         trigger="interval",
-        minutes=5,
+        minutes=1,
     )
 
     scheduler.start()

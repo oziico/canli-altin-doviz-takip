@@ -48,16 +48,15 @@ st_autorefresh(
     key="datarefresh"
 )
 
-# --------------------------------------------------
-# ALARM BİLDİRİM SİSTEMİ
-# --------------------------------------------------
 
-if "dismissed_alert_ids" not in st.session_state:
-    st.session_state.dismissed_alert_ids = set()
+last_alert = get_last_triggered_alert()
 
-if "last_sound_alert_id" not in st.session_state:
-    st.session_state.last_sound_alert_id = None
+if "last_seen_alert_id" not in st.session_state:
 
+    if last_alert is not None:
+        st.session_state.last_seen_alert_id = last_alert["id"]
+    else:
+        st.session_state.last_seen_alert_id = None
 
 last_alert = get_last_triggered_alert()
 
@@ -69,12 +68,43 @@ alert_name_map = {
     "gold_gram": "Gram Altın (TL)",
 }
 
+# --------------------------------------------------
+# ALARM TAKİP DURUMU
+# --------------------------------------------------
+
+# Uygulama ilk açıldığında mevcut son alarmı başlangıç noktası kabul et.
+# Böylece geçmişte tetiklenmiş alarm popup olarak gösterilmez.
+if "alert_system_initialized" not in st.session_state:
+
+    st.session_state.alert_system_initialized = True
+
+    st.session_state.last_seen_alert_id = (
+        last_alert["id"]
+        if last_alert is not None
+        else None
+    )
+
+    st.session_state.visible_alert_id = None
+    st.session_state.last_sound_alert_id = None
+
+
+# Veritabanında başlangıçtan daha yeni bir alarm oluşmuş mu?
+if (
+    last_alert is not None
+    and last_alert["id"] != st.session_state.last_seen_alert_id
+):
+
+    # Yeni alarm bulundu.
+    st.session_state.last_seen_alert_id = last_alert["id"]
+
+    # Bu alarmı ekranda göster.
+    st.session_state.visible_alert_id = last_alert["id"]
+
 
 show_alert = (
     last_alert is not None
-    and last_alert["id"] not in st.session_state.dismissed_alert_ids
+    and st.session_state.visible_alert_id == last_alert["id"]
 )
-
 
 if show_alert:
 
@@ -85,72 +115,68 @@ if show_alert:
         last_alert["metric"]
     )
 
-    # Alarm ilk kez görünüyorsa bip sesi çal
     if st.session_state.last_sound_alert_id != alert_id:
 
         components.html(
-            """
-            <script>
-            try {
-                const AudioContextClass =
-                    window.AudioContext || window.webkitAudioContext;
+        """
+        <script>
+        try {
+            const AudioContextClass =
+                window.AudioContext || window.webkitAudioContext;
 
-                const audioCtx = new AudioContextClass();
+            const audioCtx = new AudioContextClass();
+
+            function beep(startTime, frequency, duration, volume) {
                 const oscillator = audioCtx.createOscillator();
                 const gainNode = audioCtx.createGain();
 
                 oscillator.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
 
-                oscillator.type = "sine";
-
+                oscillator.type = "square";
                 oscillator.frequency.setValueAtTime(
-                    880,
-                    audioCtx.currentTime
+                    frequency,
+                    startTime
                 );
 
                 gainNode.gain.setValueAtTime(
-                    0.18,
-                    audioCtx.currentTime
+                    volume,
+                    startTime
                 );
 
                 gainNode.gain.exponentialRampToValueAtTime(
                     0.001,
-                    audioCtx.currentTime + 0.45
+                    startTime + duration
                 );
 
-                oscillator.start();
-
-                oscillator.stop(
-                    audioCtx.currentTime + 0.45
-                );
-
-            } catch (e) {
-                console.log("Alarm sesi çalınamadı:", e);
+                oscillator.start(startTime);
+                oscillator.stop(startTime + duration);
             }
-            </script>
-            """,
-            height=0,
-        )
+
+            const now = audioCtx.currentTime;
+
+            beep(now, 1000, 0.18, 0.28);
+            beep(now + 0.28, 1200, 0.18, 0.28);
+            beep(now + 0.56, 1000, 0.25, 0.32);
+
+        } catch (e) {
+            console.log("Alarm sesi çalınamadı:", e);
+        }
+        </script>
+        """,
+        height=0,
+    )
 
         st.session_state.last_sound_alert_id = alert_id
 
-
-    # Alarm kartının CSS görünümü
     st.markdown(
         """
 <style>
-
 .alarm-wrapper {
-
     border: 1px solid rgba(239, 68, 68, 0.55);
-
     border-left: 5px solid #ef4444;
-
     border-radius: 14px;
-
     padding: 16px 18px;
-
     margin-bottom: 10px;
 
     background:
@@ -164,56 +190,35 @@ if show_alert:
         0 10px 30px rgba(0, 0, 0, 0.30);
 }
 
-
 .alarm-header {
-
     color: #fca5a5;
-
     font-size: 18px;
-
     font-weight: 700;
-
     margin-bottom: 8px;
 }
-
 
 .alarm-asset {
-
     color: #f8fafc;
-
     font-size: 16px;
-
     font-weight: 700;
-
     margin-bottom: 8px;
 }
 
-
 .alarm-info {
-
     color: #cbd5e1;
-
     font-size: 14px;
-
     line-height: 1.7;
 }
 
-
 .alarm-current {
-
     color: #ffffff;
-
     font-weight: 700;
 }
-
 
 .alarm-target {
-
     color: #fbbf24;
-
     font-weight: 700;
 }
-
 </style>
 """,
         unsafe_allow_html=True,
@@ -225,27 +230,27 @@ if show_alert:
         vertical_alignment="top"
     )
 
-with alert_col:
-    alarm_html = (
-        '<div class="alarm-wrapper">'
-        '<div class="alarm-header">🚨 Fiyat Alarmı Tetiklendi</div>'
-        f'<div class="alarm-asset">{alert_name}</div>'
-        '<div class="alarm-info">'
-        'Güncel fiyat: '
-        f'<span class="alarm-current">{last_alert["current_value"]:.4f}</span>'
-        '<br>'
-        'Alarm koşulu: '
-        f'<span class="alarm-target">{last_alert["condition"]} '
-        f'{last_alert["target_value"]:.4f}</span>'
-        '</div>'
-        '</div>'
-    )
+    with alert_col:
 
-    st.markdown(
-        alarm_html,
-        unsafe_allow_html=True
-    )
+        alarm_html = (
+            '<div class="alarm-wrapper">'
+            '<div class="alarm-header">🚨 Fiyat Alarmı Tetiklendi</div>'
+            f'<div class="alarm-asset">{alert_name}</div>'
+            '<div class="alarm-info">'
+            'Güncel fiyat: '
+            f'<span class="alarm-current">{last_alert["current_value"]:.4f}</span>'
+            '<br>'
+            'Alarm koşulu: '
+            f'<span class="alarm-target">{last_alert["condition"]} '
+            f'{last_alert["target_value"]:.4f}</span>'
+            '</div>'
+            '</div>'
+        )
 
+        st.markdown(
+            alarm_html,
+            unsafe_allow_html=True
+        )
 
     with close_col:
 
@@ -256,9 +261,7 @@ with alert_col:
             use_container_width=True,
         ):
 
-            st.session_state.dismissed_alert_ids.add(
-                alert_id
-            )
+            st.session_state.visible_alert_id = None
 
             st.rerun()
                 
