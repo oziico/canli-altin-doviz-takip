@@ -1,5 +1,13 @@
+import os
 
-FRANKFURTER_API_URL = "https://api.frankfurter.dev/v1/latest"
+from dotenv import load_dotenv
+
+load_dotenv()
+
+TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY")
+
+TWELVE_DATA_API_URL = "https://api.twelvedata.com"
+
 GOLD_API_URL = "https://api.gold-api.com/price/XAU"
 
 REQUEST_TIMEOUT = 10

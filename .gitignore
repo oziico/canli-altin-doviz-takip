@@ -1,22 +1,17 @@
-# Virtual Environment
 venv/
 
-# Python
 __pycache__/
 *.py[cod]
 *.pyo
 
-# Database
 market_data.db
 
-# macOS
 .DS_Store
 
-# VS Code
 .vscode/
 
-# JetBrains
 .idea/
 
-# Streamlit
 .streamlit/
+
+.env

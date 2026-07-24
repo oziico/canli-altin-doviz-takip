@@ -8,6 +8,12 @@ from datetime import datetime, timedelta
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from analytics import (
+    calculate_24h_analysis,
+    get_market_leaders,
+    add_time_based_moving_averages,
+    calculate_time_based_trend,
+)
 
 from database import (
     get_all_market_data,
@@ -17,7 +23,15 @@ from database import (
     delete_alert,
     get_alert_history,
     alert_exists,
-    get_last_triggered_alert,
+)
+
+from alerts import (
+    ALERT_NAME_MAP,
+    get_new_alert,
+    should_show_alert,
+    dismiss_alert,
+    should_play_alarm_sound,
+    mark_alarm_sound_as_played,
 )
 
 st.set_page_config(
@@ -37,6 +51,73 @@ st.markdown("""
     border-radius: 10px;
     border: 1px solid #334155;
 }
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    padding: 20px 24px;
+    margin-bottom: 24px;
+
+    background: linear-gradient(
+        135deg,
+        rgba(30, 41, 59, 0.95),
+        rgba(15, 23, 42, 0.95)
+    );
+
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 16px;
+
+    box-shadow:
+        0 10px 30px rgba(0, 0, 0, 0.18);
+}
+
+.dashboard-info {
+    min-width: 0;
+}
+
+.dashboard-title {
+    font-size: 28px;
+    font-weight: 750;
+    color: #f8fafc;
+    letter-spacing: -0.5px;
+}
+
+.dashboard-subtitle {
+    margin-top: 6px;
+    font-size: 14px;
+    color: #94a3b8;
+}
+
+.live-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    padding: 7px 12px;
+
+    border-radius: 999px;
+
+    background: rgba(34, 197, 94, 0.10);
+    border: 1px solid rgba(34, 197, 94, 0.30);
+
+    color: #4ade80;
+
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+}
+
+.live-dot {
+    width: 8px;
+    height: 8px;
+
+    background: #22c55e;
+    border-radius: 50%;
+
+    box-shadow:
+        0 0 0 4px rgba(34, 197, 94, 0.10);
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -49,73 +130,20 @@ st_autorefresh(
 )
 
 
-last_alert = get_last_triggered_alert()
+last_alert = get_new_alert()
 
-if "last_seen_alert_id" not in st.session_state:
-
-    if last_alert is not None:
-        st.session_state.last_seen_alert_id = last_alert["id"]
-    else:
-        st.session_state.last_seen_alert_id = None
-
-last_alert = get_last_triggered_alert()
-
-alert_name_map = {
-    "usd_try": "USD / TRY",
-    "eur_try": "EUR / TRY",
-    "gbp_try": "GBP / TRY",
-    "gold_ounce": "Ons Altın ($)",
-    "gold_gram": "Gram Altın (TL)",
-}
-
-# --------------------------------------------------
-# ALARM TAKİP DURUMU
-# --------------------------------------------------
-
-# Uygulama ilk açıldığında mevcut son alarmı başlangıç noktası kabul et.
-# Böylece geçmişte tetiklenmiş alarm popup olarak gösterilmez.
-if "alert_system_initialized" not in st.session_state:
-
-    st.session_state.alert_system_initialized = True
-
-    st.session_state.last_seen_alert_id = (
-        last_alert["id"]
-        if last_alert is not None
-        else None
-    )
-
-    st.session_state.visible_alert_id = None
-    st.session_state.last_sound_alert_id = None
-
-
-# Veritabanında başlangıçtan daha yeni bir alarm oluşmuş mu?
-if (
-    last_alert is not None
-    and last_alert["id"] != st.session_state.last_seen_alert_id
-):
-
-    # Yeni alarm bulundu.
-    st.session_state.last_seen_alert_id = last_alert["id"]
-
-    # Bu alarmı ekranda göster.
-    st.session_state.visible_alert_id = last_alert["id"]
-
-
-show_alert = (
-    last_alert is not None
-    and st.session_state.visible_alert_id == last_alert["id"]
-)
+show_alert = should_show_alert(last_alert)
 
 if show_alert:
 
     alert_id = last_alert["id"]
 
-    alert_name = alert_name_map.get(
+    alert_name = ALERT_NAME_MAP.get(
         last_alert["metric"],
         last_alert["metric"]
     )
 
-    if st.session_state.last_sound_alert_id != alert_id:
+    if should_play_alarm_sound(alert_id):
 
         components.html(
         """
@@ -167,7 +195,7 @@ if show_alert:
         height=0,
     )
 
-        st.session_state.last_sound_alert_id = alert_id
+        mark_alarm_sound_as_played(alert_id)
 
     st.markdown(
         """
@@ -261,12 +289,28 @@ if show_alert:
             use_container_width=True,
         ):
 
-            st.session_state.visible_alert_id = None
-
+            dismiss_alert()
             st.rerun()
                 
-st.title("📈 Canlı Altın ve Döviz Takip Sistemi")
-st.caption("Profesyonel Finansal Analiz ve Takip Paneli (SQLite Live Data)")
+header_html = (
+    '<div class="dashboard-header">'
+    '<div class="dashboard-info">'
+    '<div class="dashboard-title">📈 Canlı Altın ve Döviz Takip Sistemi</div>'
+    '<div class="dashboard-subtitle">'
+    'Gerçek zamanlı piyasa takibi, finansal analiz ve fiyat alarm sistemi'
+    '</div>'
+    '</div>'
+    '<div class="live-badge">'
+    '<span class="live-dot"></span>'
+    '<span>CANLI</span>'
+    '</div>'
+    '</div>'
+)
+
+st.markdown(
+    header_html,
+    unsafe_allow_html=True,
+)
 
 latest = get_latest_market_data()
 data_all = get_all_market_data()
@@ -280,28 +324,29 @@ df_all["timestamp"] = pd.to_datetime(df_all["timestamp"])
 last_time = pd.to_datetime(latest["timestamp"])
 formatted_time = last_time.strftime("%d.%m.%Y %H:%M:%S")
 
-metrics = ['usd_try', 'eur_try', 'gbp_try', 'gold_ounce', 'gold_gram']
-changes_24h = {}
-volatility_24h = {}
+metrics = [
+    "usd_try",
+    "eur_try",
+    "gbp_try",
+    "gold_ounce",
+    "gold_gram",
+]
 
-t_threshold = last_time - timedelta(days=1)
-df_24h = df_all[df_all["timestamp"] >= t_threshold].sort_values("timestamp")
+changes_24h, volatility_24h = calculate_24h_analysis(
+    df_all,
+    latest,
+    metrics,
+)
 
-for col in metrics:
-    v_now = latest[col]
-    
-    if not df_24h.empty and len(df_24h) >= 2:
-        v_prev = df_24h[col].iloc[0]
-        pct = ((v_now - v_prev) / v_prev) * 100 if v_prev > 0 else 0.0
-        pct_returns = df_24h[col].pct_change().dropna()
-        vol = pct_returns.std() * 100
-    else:
-        v_prev = v_now
-        pct = 0.0
-        vol = 0.0
-        
-    changes_24h[col] = {"diff": v_now - v_prev, "pct": pct}
-    volatility_24h[col] = vol
+(
+    max_dropped,
+    max_gained,
+    max_volatile_key,
+    max_volatility_val,
+) = get_market_leaders(
+    changes_24h,
+    volatility_24h,
+)
 
 name_map = {
     'usd_try': 'USD / TRY',
@@ -310,13 +355,6 @@ name_map = {
     'gold_ounce': 'Ons Altın ($)',
     'gold_gram': 'Gram Altın (TL)'
 }
-
-sorted_changes = sorted(changes_24h.items(), key=lambda x: x[1]["pct"])
-max_dropped = sorted_changes[0]
-max_gained = sorted_changes[-1]
-
-max_volatile_key = max(volatility_24h, key=volatility_24h.get)
-max_volatility_val = volatility_24h[max_volatile_key]
 
 st.sidebar.header("🔔 Fiyat Alarm Sistemi")
 
@@ -540,6 +578,153 @@ def show_statistics(df, column, suffix):
         </div>
         """, unsafe_allow_html=True)
 
+def show_market_chart(
+    df,
+    column,
+    title,
+    suffix,
+    line_color,
+    precision=4,
+):
+    """
+    Seçilen piyasa varlığı için:
+
+    - Fiyat grafiği
+    - 30 dakikalık hareketli ortalama
+    - 60 dakikalık hareketli ortalama
+    - Trend analizi
+    - İstatistik kartları
+
+    gösterir.
+    """
+
+    st.subheader(title)
+
+    analyzed_df = add_time_based_moving_averages(
+        df,
+        column,
+        short_minutes=30,
+        long_minutes=60,
+    )
+
+    short_ma_column = f"{column}_ma_short"
+    long_ma_column = f"{column}_ma_long"
+
+    # Ana fiyat grafiği
+    fig = px.line(
+        analyzed_df,
+        x="timestamp",
+        y=column,
+        markers=True,
+        title=title,
+        color_discrete_sequence=[line_color],
+    )
+
+    fig.update_traces(
+        line=dict(width=3),
+        marker=dict(size=7),
+        name="Fiyat",
+    )
+
+    # 30 dakikalık kısa dönem hareketli ortalama
+    fig.add_scatter(
+        x=analyzed_df["timestamp"],
+        y=analyzed_df[short_ma_column],
+        mode="lines",
+        name="Kısa Dönem (30 dk)",
+        line=dict(
+            width=2,
+            dash="dash",
+        ),
+    )
+
+    # 60 dakikalık uzun dönem hareketli ortalama
+    fig.add_scatter(
+        x=analyzed_df["timestamp"],
+        y=analyzed_df[long_ma_column],
+        mode="lines",
+        name="Uzun Dönem (60 dk)",
+        line=dict(
+            width=2,
+            dash="dot",
+        ),
+    )
+
+    # Son fiyat etiketi
+    if not analyzed_df.empty:
+
+        latest_value = analyzed_df[column].iloc[-1]
+
+        fig.add_annotation(
+            x=analyzed_df["timestamp"].iloc[-1],
+            y=latest_value,
+            text=f"{latest_value:.{precision}f}",
+            showarrow=True,
+            arrowhead=2,
+            bgcolor=line_color,
+        )
+
+    fig.update_layout(
+        height=400,
+        template="plotly_dark",
+        margin=dict(
+            l=10,
+            r=10,
+            t=40,
+            b=10,
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+        ),
+    )
+
+    st.plotly_chart(
+        fig,
+        width="stretch",
+    )
+
+    # Trend analizi
+    trend = calculate_time_based_trend(
+        df,
+        column,
+        short_minutes=30,
+        long_minutes=60,
+    )
+
+    if trend == "Yükseliş Eğilimi":
+
+        st.success(
+            f"📈 Trend Analizi: **{trend}**"
+        )
+
+    elif trend == "Düşüş Eğilimi":
+
+        st.error(
+            f"📉 Trend Analizi: **{trend}**"
+        )
+
+    elif trend == "Yetersiz Veri":
+
+        st.warning(
+            "⏳ Trend Analizi: **Yeterli veri birikmesi bekleniyor**"
+        )
+
+    else:
+
+        st.info(
+            f"➡️ Trend Analizi: **{trend}**"
+        )
+
+    show_statistics(
+        df,
+        column,
+        suffix,
+    )
+
 df = df_all.copy()
 
 st.sidebar.header("⚙️ Filtreler")
@@ -563,194 +748,153 @@ elif period == "Son 7 Gün":
     df = df[df["timestamp"] >= now - timedelta(days=7)]
 
 if df.empty:
-    st.info("Seçilen zaman aralığında veri bulunmuyor.")
+
+    st.info(
+        "Seçilen zaman aralığında veri bulunmuyor."
+    )
+
 else:
+
+    # ==============================================
+    # ALTIN ANALİZİ
+    # ==============================================
+
     st.header("🥇 Altın Analizi")
-    gold_col1, divider, gold_col2 = st.columns([1, 0.03, 1])
+
+    gold_col1, divider, gold_col2 = st.columns(
+        [1, 0.03, 1]
+    )
 
     with divider:
+
         st.markdown(
             """
             <div style="
                 border-left:1px solid rgba(255,255,255,0.20);
-                height:600px;
+                height:650px;
                 margin:auto;
-                "></div>
+            ">
+            </div>
             """,
             unsafe_allow_html=True,
         )
 
+    # Gram Altın
     with gold_col1:
-        st.markdown("### 📈 Gram Altın Grafiği")
-        fig = px.line(
-            df,
-            x="timestamp",
-            y="gold_gram",
-            markers=True,
-            title="Gram Altın (TL)",
-            color_discrete_sequence=["gold"],
-        )
-        fig.update_traces(line=dict(width=3), marker=dict(size=8))
-        if not df.empty:
-            fig.add_annotation(
-                x=df["timestamp"].iloc[-1],
-                y=df["gold_gram"].iloc[-1],
-                text=f"{df['gold_gram'].iloc[-1]:.2f}",
-                showarrow=True,
-                arrowhead=2,
-                bgcolor="gold",
-            )
-        fig.update_layout(
-            height=400,
-            template="plotly_dark",
-            margin=dict(l=10, r=10, t=40, b=10),
-        )
-        st.plotly_chart(fig, width="stretch")
-        show_statistics(df, "gold_gram", "TL")
 
+        show_market_chart(
+            df=df,
+            column="gold_gram",
+            title="📈 Gram Altın Grafiği",
+            suffix="TL",
+            line_color="gold",
+            precision=2,
+        )
+
+    # Ons Altın
     with gold_col2:
-        st.subheader("📈 Ons Altın Grafiği")
-        fig = px.line(
-            df,
-            x="timestamp",
-            y="gold_ounce",
-            markers=True,
-            title="Ons Altın ($)",
-            color_discrete_sequence=["orange"],
+
+        show_market_chart(
+            df=df,
+            column="gold_ounce",
+            title="📈 Ons Altın Grafiği",
+            suffix="$",
+            line_color="orange",
+            precision=2,
         )
-        fig.update_traces(line=dict(width=3), marker=dict(size=8))
-        fig.update_layout(
-            height=400,
-            template="plotly_dark",
-            margin=dict(l=10, r=10, t=40, b=10),
-        )
-        
-        if not df.empty:
-            fig.add_annotation(
-                x=df["timestamp"].iloc[-1],
-                y=df["gold_ounce"].iloc[-1],
-                text=f"{df['gold_ounce'].iloc[-1]:.2f}",
-                showarrow=True,
-                arrowhead=2,
-                bgcolor="orange",
-            )
-        st.plotly_chart(fig, width="stretch")
-        show_statistics(df, "gold_ounce", "$")
+
 
     st.divider()
 
+
+    # ==============================================
+    # DÖVİZ ANALİZİ
+    # ==============================================
+
     st.header("💵 Döviz Analizi")
-    usd_col, divider1, eur_col, divider2, gbp_col = st.columns([1, 0.03, 1, 0.03, 1])
+
+    usd_col, divider1, eur_col, divider2, gbp_col = (
+        st.columns(
+            [
+                1,
+                0.03,
+                1,
+                0.03,
+                1,
+            ]
+        )
+    )
 
     with divider1:
+
         st.markdown(
             """
             <div style="
                 border-left:1px solid rgba(255,255,255,0.20);
-                height:600px;
+                height:650px;
                 margin:auto;
-            "></div>
+            ">
+            </div>
             """,
             unsafe_allow_html=True,
         )
 
     with divider2:
+
         st.markdown(
             """
             <div style="
                 border-left:1px solid rgba(255,255,255,0.20);
-                height:600px;
+                height:650px;
                 margin:auto;
-            "></div>
+            ">
+            </div>
             """,
             unsafe_allow_html=True,
         )
 
+
+    # USD / TRY
     with usd_col:
-        st.subheader("💵 USD / TRY Grafiği")
-        fig = px.line(
-            df,
-            x="timestamp",
-            y="usd_try",
-            markers=True,
-            title="USD / TRY",
-            color_discrete_sequence=["green"],
-        )
-        fig.update_traces(line=dict(width=3), marker=dict(size=8))
-        fig.update_layout(
-            height=400,
-            template="plotly_dark",
-            margin=dict(l=10, r=10, t=40, b=10),
-        )
-        if not df.empty:
-            fig.add_annotation(
-                x=df["timestamp"].iloc[-1],
-                y=df["usd_try"].iloc[-1],
-                text=f"{df['usd_try'].iloc[-1]:.4f}",
-                showarrow=True,
-                arrowhead=2,
-                bgcolor="green",
-            )
-        st.plotly_chart(fig, width="stretch")
-        show_statistics(df, "usd_try", "TL")
 
+        show_market_chart(
+            df=df,
+            column="usd_try",
+            title="💵 USD / TRY Grafiği",
+            suffix="TL",
+            line_color="green",
+            precision=4,
+        )
+
+
+    # EUR / TRY
     with eur_col:
-        st.subheader("💶 EUR / TRY Grafiği")
-        fig = px.line(
-            df,
-            x="timestamp",
-            y="eur_try",
-            markers=True,
-            title="EUR / TRY",
-            color_discrete_sequence=["royalblue"],
-        )
-        fig.update_traces(line=dict(width=3), marker=dict(size=8))
-        fig.update_layout(
-            height=400,
-            template="plotly_dark",
-            margin=dict(l=10, r=10, t=40, b=10),
-        )
-        if not df.empty:
-            fig.add_annotation(
-                x=df["timestamp"].iloc[-1],
-                y=df["eur_try"].iloc[-1],
-                text=f"{df['eur_try'].iloc[-1]:.4f}",
-                showarrow=True,
-                arrowhead=2,
-                bgcolor="royalblue",
-            )
-        st.plotly_chart(fig, width="stretch")
-        show_statistics(df, "eur_try", "TL")
 
+        show_market_chart(
+            df=df,
+            column="eur_try",
+            title="💶 EUR / TRY Grafiği",
+            suffix="TL",
+            line_color="royalblue",
+            precision=4,
+        )
+
+
+    # GBP / TRY
     with gbp_col:
-        st.subheader("💷 GBP / TRY Grafiği")
-        fig = px.line(
-            df,
-            x="timestamp",
-            y="gbp_try",
-            markers=True,
-            title="GBP / TRY",
-            color_discrete_sequence=["purple"],
+
+        show_market_chart(
+            df=df,
+            column="gbp_try",
+            title="💷 GBP / TRY Grafiği",
+            suffix="TL",
+            line_color="purple",
+            precision=4,
         )
-        fig.update_traces(line=dict(width=3), marker=dict(size=8))
-        fig.update_layout(
-            height=400,
-            template="plotly_dark",
-            margin=dict(l=10, r=10, t=40, b=10),
-        )
-        if not df.empty:
-            fig.add_annotation(
-                x=df["timestamp"].iloc[-1],
-                y=df["gbp_try"].iloc[-1],
-                text=f"{df['gbp_try'].iloc[-1]:.4f}",
-                showarrow=True,
-                arrowhead=2,
-                bgcolor="purple",
-            )
-        st.plotly_chart(fig, width="stretch")
-        show_statistics(df, "gbp_try", "TL")
+
 
 st.divider()
+
 
 st.subheader("📋 Veritabanındaki Tüm Kayıtlar")
 
