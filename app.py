@@ -1,13 +1,22 @@
-import platform
 import os
-
-if platform.system() == "Darwin":
-    os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
-
+import platform
 from datetime import datetime, timedelta
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import streamlit.components.v1 as components
+from streamlit_autorefresh import st_autorefresh
+
+from alerts import (
+    ALERT_NAME_MAP,
+    get_new_alert,
+    should_show_alert,
+    dismiss_alert,
+    should_play_alarm_sound,
+    mark_alarm_sound_as_played,
+)
+
 from analytics import (
     calculate_24h_analysis,
     get_market_leaders,
@@ -25,14 +34,8 @@ from database import (
     alert_exists,
 )
 
-from alerts import (
-    ALERT_NAME_MAP,
-    get_new_alert,
-    should_show_alert,
-    dismiss_alert,
-    should_play_alarm_sound,
-    mark_alarm_sound_as_played,
-)
+if platform.system() == "Darwin":
+    os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
 
 st.set_page_config(
     page_title="Canlı Altın ve Döviz Takip Sistemi",
@@ -587,268 +590,7 @@ div[data-testid="stAlert"][data-baseweb="notification"] {
     unsafe_allow_html=True,
 )
 
-from streamlit_autorefresh import st_autorefresh
-import streamlit.components.v1 as components
-
-st_autorefresh(
-    interval=10000,
-    key="datarefresh"
-)
-
-
-last_alert = get_new_alert()
-show_alert = should_show_alert(last_alert)
-
-if show_alert:
-    alert_id = last_alert["id"]
-
-    alert_name = ALERT_NAME_MAP.get(
-        last_alert["metric"],
-        last_alert["metric"],
-    )
-
-    if should_play_alarm_sound(alert_id):
-        components.html(
-            """
-            <script>
-            try {
-                const AudioContextClass =
-                    window.AudioContext || window.webkitAudioContext;
-
-                const audioCtx = new AudioContextClass();
-
-                function beep(startTime, frequency, duration, volume) {
-                    const oscillator = audioCtx.createOscillator();
-                    const gainNode = audioCtx.createGain();
-
-                    oscillator.connect(gainNode);
-                    gainNode.connect(audioCtx.destination);
-
-                    oscillator.type = "square";
-                    oscillator.frequency.setValueAtTime(
-                        frequency,
-                        startTime
-                    );
-
-                    gainNode.gain.setValueAtTime(
-                        volume,
-                        startTime
-                    );
-
-                    gainNode.gain.exponentialRampToValueAtTime(
-                        0.001,
-                        startTime + duration
-                    );
-
-                    oscillator.start(startTime);
-                    oscillator.stop(startTime + duration);
-                }
-
-                const now = audioCtx.currentTime;
-
-                beep(now, 1000, 0.18, 0.28);
-                beep(now + 0.28, 1200, 0.18, 0.28);
-                beep(now + 0.56, 1000, 0.25, 0.32);
-
-            } catch (e) {
-                console.log("Alarm sesi çalınamadı:", e);
-            }
-            </script>
-            """,
-            height=0,
-        )
-
-        mark_alarm_sound_as_played(alert_id)
-
-    st.markdown(
-        """
-        <style>
-        .st-key-triggered_alarm_banner {
-            background: #FFFFFF !important;
-            border: 1px solid #FCA5A5 !important;
-            border-left: 6px solid #EF4444 !important;
-            border-radius: 14px !important;
-            padding: 12px 16px !important;
-            box-shadow: 0 10px 26px rgba(15, 23, 42, 0.10) !important;
-        }
-
-        .st-key-triggered_alarm_banner .alarm-wrapper {
-            margin: 0 !important;
-            padding: 0 !important;
-            border: none !important;
-            background: transparent !important;
-            box-shadow: none !important;
-        }
-
-        .st-key-triggered_alarm_banner .alarm-header {
-            margin-bottom: 10px !important;
-            color: #DC2626 !important;
-            font-size: 18px !important;
-            font-weight: 850 !important;
-            line-height: 1.3 !important;
-        }
-
-        .st-key-triggered_alarm_banner .alarm-asset {
-            margin-bottom: 7px !important;
-            color: #0F172A !important;
-            font-size: 17px !important;
-            font-weight: 850 !important;
-        }
-
-        .st-key-triggered_alarm_banner .alarm-info {
-            color: #475569 !important;
-            font-size: 14px !important;
-            line-height: 1.5 !important;
-            margin-bottom: 18px !important;
-        }
-
-        .st-key-triggered_alarm_banner .alarm-current {
-            color: #0F172A !important;
-            font-weight: 850 !important;
-        }
-
-        .st-key-triggered_alarm_banner .alarm-target {
-            color: #D97706 !important;
-            font-weight: 850 !important;
-        }
-
-        .st-key-triggered_alarm_banner button {
-            width: 40px !important;
-            min-width: 40px !important;
-            height: 40px !important;
-            min-height: 40px !important;
-            padding: 0 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            background: #FFFFFF !important;
-            color: #64748B !important;
-            border: 1px solid #CBD5E1 !important;
-            border-radius: 10px !important;
-            box-shadow: none !important;
-        }
-
-        .st-key-triggered_alarm_banner button:hover {
-            background: #FEF2F2 !important;
-            color: #DC2626 !important;
-            border-color: #FCA5A5 !important;
-        }
-
-        .st-key-triggered_alarm_banner button p {
-            margin: 0 !important;
-            padding: 0 !important;
-            color: inherit !important;
-            font-size: 18px !important;
-            line-height: 1 !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    with st.container(
-        border=True,
-        key="triggered_alarm_banner",
-    ):
-        content_col, close_col = st.columns(
-            [18, 1],
-            vertical_alignment="top",
-        )
-
-        with content_col:
-            alarm_html = (
-                '<div class="alarm-wrapper">'
-                '<div class="alarm-header">'
-                '🚨 Fiyat Alarmı Tetiklendi'
-                '</div>'
-                f'<div class="alarm-asset">{alert_name}</div>'
-                '<div class="alarm-info">'
-                'Güncel Fiyat: '
-                f'<span class="alarm-current">'
-                f'{last_alert["current_value"]:.4f}'
-                '</span>'
-                '<br>'
-                'Alarm Koşulu: '
-                f'<span class="alarm-target">'
-                f'{last_alert["condition"]} '
-                f'{last_alert["target_value"]:.4f}'
-                '</span>'
-                '</div>'
-                '</div>'
-            )
-
-            st.markdown(
-                alarm_html,
-                unsafe_allow_html=True,
-            )
-
-        with close_col:
-            st.markdown(
-                "<div style='height:6px'></div>",
-                unsafe_allow_html=True,
-            )
-
-            if st.button(
-                "✕",
-                key=f"dismiss_alert_{alert_id}",
-                help="Kapat",
-                type="secondary",
-                use_container_width=True,
-            ):
-                dismiss_alert()
-                st.rerun()
-                
-header_html = (
-    '<div class="hero-card">'
-    '<div class="hero-top">'
-    '<div>'
-    '<div class="hero-eyebrow">FİNANSAL PİYASA TAKİP PANELİ</div>'
-    '<div class="hero-title">'
-    'Canlı Altın ve Döviz Takip Sistemi'
-    '</div>'
-    '<div class="hero-subtitle">'
-    'Gerçek zamanlı döviz ve altın fiyatlarını izleyin, '
-    'piyasa hareketlerini analiz edin ve belirlediğiniz '
-    'fiyat seviyeleri için anlık alarm oluşturun.'
-    '</div>'
-    '</div>'
-    '<div class="live-pill">'
-    '<span class="live-dot"></span>'
-    '<span>CANLI PİYASA</span>'
-    '</div>'
-    '</div>'
-    '</div>'
-)
-
-st.markdown(
-    header_html,
-    unsafe_allow_html=True,
-)
-
-latest = get_latest_market_data()
-data_all = get_all_market_data()
-df_all = pd.DataFrame(data_all)
-
-if latest is None or df_all.empty:
-    st.warning("Henüz veritabanında yeterli veri bulunmuyor.")
-    st.stop()
-
-df_all["timestamp"] = pd.to_datetime(df_all["timestamp"])
-last_time = pd.to_datetime(latest["timestamp"])
-formatted_time = last_time.strftime("%d.%m.%Y %H:%M:%S")
-
-last_update_html = (
-    '<div style="background:#FFFFFF;padding:11px 16px;border:1px solid #DCE4EE;'
-    'border-left:4px solid #2563EB;display:flex;align-items:center;gap:9px;'
-    'margin-top:8px;margin-bottom:16px;box-shadow:0 4px 14px rgba(15,23,42,0.04);">'
-    '<span style="font-size:14px;color:#475569;font-weight:700;">SON VERİ GİRİŞİ</span>'
-    f'<strong style="font-size:14px;color:#0F172A;font-weight:800;">{formatted_time}</strong>'
-    '</div>'
-)
-
-st.markdown(last_update_html, unsafe_allow_html=True)
-
-metrics = [
+METRICS = [
     "usd_try",
     "eur_try",
     "gbp_try",
@@ -856,13 +598,15 @@ metrics = [
     "gold_gram",
 ]
 
-changes_24h, volatility_24h = calculate_24h_analysis(
-    df_all,
-    latest,
-    metrics,
-)
+NAME_MAP = {
+    "usd_try": "USD / TRY",
+    "eur_try": "EUR / TRY",
+    "gbp_try": "GBP / TRY",
+    "gold_ounce": "Ons Altın ($)",
+    "gold_gram": "Gram Altın (TL)",
+}
 
-ticker_assets = [
+TICKER_ASSETS = [
     ("USD / TRY", "usd_try"),
     ("EUR / TRY", "eur_try"),
     ("GBP / TRY", "gbp_try"),
@@ -870,71 +614,17 @@ ticker_assets = [
     ("Ons Altın", "gold_ounce"),
 ]
 
-ticker_items = []
-
-for _ in range(2):
-    for title, key in ticker_assets:
-        value = latest[key]
-        change = changes_24h[key]["pct"]
-
-        if change >= 0:
-            arrow = "▲"
-            cls = "ticker-up"
-        else:
-            arrow = "▼"
-            cls = "ticker-down"
-
-        value_text = f"{value:.2f}" if "gold" in key else f"{value:.4f}"
-
-        ticker_items.append(
-            f'<span class="ticker-item">'
-            f'<span class="ticker-price">{title}</span>'
-            f'<span class="ticker-price">{value_text}</span>'
-            f'<span class="{cls}">{arrow} {abs(change):.2f}%</span>'
-            f'</span>'
-        )
-
-ticker_html = (
-    '<div class="top-ticker">'
-    '<div class="top-ticker-label">📡 CANLI PİYASA</div>'
-    '<div class="top-ticker-window">'
-    '<div class="top-ticker-track">'
-    + "".join(ticker_items)
-    + '</div></div></div>'
-)
-
-st.markdown(
-    ticker_html,
-    unsafe_allow_html=True,
-)
-
-(
-    max_dropped,
-    max_gained,
-    max_volatile_key,
-    max_volatility_val,
-) = get_market_leaders(
-    changes_24h,
-    volatility_24h,
-)
-
-name_map = {
-    'usd_try': 'USD / TRY',
-    'eur_try': 'EUR / TRY',
-    'gbp_try': 'GBP / TRY',
-    'gold_ounce': 'Ons Altın ($)',
-    'gold_gram': 'Gram Altın (TL)'
-}
-st.markdown(
-    '<div class="section-kicker section-prices" style="margin-top:18px;">'
-    'CANLI PİYASA FİYATLARI'
-    '</div>',
-    unsafe_allow_html=True,
-)
-
-def build_price_item(metric, label, value, unit, css_class):
-    change = changes_24h[metric]["pct"]
-    volatility = volatility_24h[metric]
+def build_price_item(
+    metric,
+    label,
+    value,
+    unit,
+    css_class,
+    changes,
+    volatilities,
+):
+    change = changes[metric]["pct"]
+    volatility = volatilities[metric]
 
     if change >= 0:
         change_class = "price-change-up"
@@ -949,449 +639,14 @@ def build_price_item(metric, label, value, unit, css_class):
         f'<div class="price-item-value">{value}'
         f'<span class="price-item-unit">{unit}</span></div>'
         '<div class="price-item-meta">'
-        f'<span class="{change_class}">{change_icon} {abs(change):.2f}%</span>'
-        f'<span class="price-vol">VOL {volatility:.2f}%</span>'
+        f'<span class="{change_class}">'
+        f'{change_icon} {abs(change):.2f}%'
+        '</span>'
+        f'<span class="price-vol">'
+        f'VOL {volatility:.2f}%'
+        '</span>'
         '</div>'
         '</div>'
-    )
-
-st.markdown(
-    '<div class="price-group-title fx">DÖVİZ</div>',
-    unsafe_allow_html=True,
-)
-
-fx_prices_html = (
-    '<div class="price-strip fx-grid">'
-    + build_price_item(
-        "usd_try",
-        "ABD DOLARI",
-        f"{latest['usd_try']:.4f}",
-        "TRY",
-        "price-usd",
-    )
-    + build_price_item(
-        "eur_try",
-        "EURO",
-        f"{latest['eur_try']:.4f}",
-        "TRY",
-        "price-eur",
-    )
-    + build_price_item(
-        "gbp_try",
-        "İNGİLİZ STERLİNİ",
-        f"{latest['gbp_try']:.4f}",
-        "TRY",
-        "price-gbp",
-    )
-    + '</div>'
-)
-
-st.markdown(
-    fx_prices_html,
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    '<div class="price-group-title gold">ALTIN</div>',
-    unsafe_allow_html=True,
-)
-
-gold_prices_html = (
-    '<div class="price-strip gold-grid">'
-    + build_price_item(
-        "gold_gram",
-        "GRAM ALTIN",
-        f"{latest['gold_gram']:.2f}",
-        "TRY",
-        "price-gram",
-    )
-    + build_price_item(
-        "gold_ounce",
-        "ONS ALTIN",
-        f"{latest['gold_ounce']:.2f}",
-        "USD",
-        "price-ounce",
-    )
-    + '</div>'
-)
-
-st.markdown(
-    gold_prices_html,
-    unsafe_allow_html=True,
-)
-
-# =========================================================
-# MAIN PAGE ALARM CENTER
-# =========================================================
-
-st.markdown(
-    '<div class="alarm-section-title">ALARM MERKEZİ</div>',
-    unsafe_allow_html=True,
-)
-
-st.markdown('<div class="alarm-dashboard-row">', unsafe_allow_html=True)
-
-alarm_form_col, active_alarm_col, history_col = st.columns(
-    [1.15, 1, 1],
-    gap="small",
-)
-
-with alarm_form_col:
-    with st.container(
-        border=True,
-        height=355,
-        key="alarm_create_card",
-    ):
-        st.markdown(
-            '<div class="alarm-panel-title">🔔 Alarm Merkezi</div>',
-            unsafe_allow_html=True,
-        )
-
-        # -------------------------------------------------
-        # Birinci sıra
-        # Varlık | Mevcut Fiyat | Koşul
-        # -------------------------------------------------
-
-        asset_col, current_col, condition_col = st.columns(
-            [1.1, 0.9, 1.2],
-            gap="small",
-        )
-
-        with asset_col:
-            alert_metric = st.selectbox(
-                "VARLIK",
-                options=metrics,
-                format_func=lambda x: name_map[x],
-                key="main_alert_metric_select",
-            )
-
-        current_asset_value = float(latest[alert_metric])
-
-        with current_col:
-            st.markdown(
-                '<div class="alarm-field-label">MEVCUT FİYAT</div>',
-                unsafe_allow_html=True,
-            )
-
-            st.markdown(
-                (
-                    '<div class="alarm-current-price">'
-                    f'{current_asset_value:.4f}'
-                    '</div>'
-                ),
-                unsafe_allow_html=True,
-            )
-
-        with condition_col:
-            alert_condition = st.selectbox(
-                "KOŞUL",
-                options=[">", "<"],
-                format_func=lambda value: (
-                    "↗ Üzerine çıkarsa"
-                    if value == ">"
-                    else "↘ Altına düşerse"
-                ),
-                key="main_alert_condition",
-            )
-
-        # -------------------------------------------------
-        # İkinci sıra
-        # Hedef Fiyat | Alarm Oluştur
-        # -------------------------------------------------
-
-        target_col, button_col = st.columns(
-            [1.35, 1],
-            gap="small",
-            vertical_alignment="bottom",
-        )
-
-        with target_col:
-            alert_target_str = st.text_input(
-                "HEDEF FİYAT",
-                value=f"{current_asset_value:.4f}",
-                key=f"main_target_input_{alert_metric}",
-            )
-
-        with button_col:
-            create_alarm_clicked = st.button(
-                "＋ ALARM OLUŞTUR",
-                use_container_width=True,
-                type="primary",
-                key="main_create_alert",
-            )
-
-        # -------------------------------------------------
-        # Alarm oluşturma kontrolü
-        # -------------------------------------------------
-
-        if create_alarm_clicked:
-            try:
-                alert_target = float(alert_target_str)
-
-                is_already_passed = (
-                    alert_condition == ">"
-                    and current_asset_value > alert_target
-                ) or (
-                    alert_condition == "<"
-                    and current_asset_value < alert_target
-                )
-
-                if is_already_passed:
-                    direction_text = (
-                        "üzerinde"
-                        if alert_condition == ">"
-                        else "altında"
-                    )
-
-                    st.warning(
-                        "Mevcut fiyat zaten hedef değerin "
-                        f"{direction_text}. Farklı bir hedef girin."
-                    )
-
-                elif alert_exists(
-                    alert_metric,
-                    alert_condition,
-                    alert_target,
-                ):
-                    st.warning(
-                        "Bu kriterlere sahip aktif bir alarm zaten mevcut."
-                    )
-
-                else:
-                    insert_alert(
-                        alert_metric,
-                        alert_condition,
-                        alert_target,
-                    )
-
-                    st.success(
-                        f"Alarm oluşturuldu: {name_map[alert_metric]} "
-                        f"{alert_condition} {alert_target:.4f}"
-                    )
-
-                    st.rerun()
-
-            except ValueError:
-                st.error("Lütfen geçerli bir hedef fiyat girin.")
-
-        st.markdown(
-            (
-                '<div class="alarm-helper">'
-                'ⓘ Belirlediğiniz koşul gerçekleştiğinde '
-                'anlık bildirim alırsınız.'
-                '</div>'
-            ),
-            unsafe_allow_html=True,
-        )
-
-
-with active_alarm_col:
-    with st.container(
-        border=True,
-        height=355,
-        key="active_alerts_card",
-    ):
-        current_active = get_active_alerts()
-
-        st.markdown(
-            f'<div class="alarm-panel-title">↗ Aktif Alarmlar ({len(current_active)})</div>',
-            unsafe_allow_html=True,
-        )
-
-        if not current_active:
-            st.markdown(
-                '<div class="alarm-empty">Bekleyen aktif alarm bulunmuyor.</div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            for act in current_active[:5]:
-                asset_name = name_map[act["metric"]]
-                is_above = act["condition"] == ">"
-                condition_text = (
-                    "Üzerine çıkarsa"
-                    if is_above
-                    else "Altına düşerse"
-                )
-                condition_class = (
-                    "alarm-condition-up"
-                    if is_above
-                    else "alarm-condition-down"
-                )
-                current_value = float(latest[act["metric"]])
-
-                row_col, delete_col = st.columns(
-                    [7, 1],
-                    vertical_alignment="center",
-                )
-
-                with row_col:
-                    st.markdown(
-                        (
-                            '<div class="active-alarm-row">'
-                            '<div class="alarm-row-top">'
-                            f'<span>{asset_name}</span>'
-                            f'<span>{act["target_value"]:.4f}</span>'
-                            '</div>'
-                            '<div class="alarm-row-bottom">'
-                            f'<span class="{condition_class}">{condition_text}</span>'
-                            f'<span>Mevcut: {current_value:.4f}</span>'
-                            '</div>'
-                            '</div>'
-                        ),
-                        unsafe_allow_html=True,
-                    )
-
-                with delete_col:
-                    if st.button(
-                        "🗑",
-                        key=f"main_del_{act['id']}",
-                        help="Alarmı sil",
-                        use_container_width=True,
-                    ):
-                        delete_alert(act["id"])
-                        st.rerun()
-
-with history_col:
-    with st.container(
-        border=True,
-        height=355,
-        key="alert_history_card",
-    ):
-        history = get_alert_history()
-
-        st.markdown(
-            '<div class="alarm-panel-title">◷ Alarm Geçmişi</div>',
-            unsafe_allow_html=True,
-        )
-
-        if not history:
-            st.markdown(
-                '<div class="alarm-empty">Henüz tetiklenen alarm bulunmuyor.</div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            for item in history[:4]:
-                asset_name = name_map[item["metric"]]
-                is_above = item["condition"] == ">"
-                direction = "Üzerine çıktı" if is_above else "Altına düştü"
-                condition_class = (
-                    "alarm-condition-up"
-                    if is_above
-                    else "alarm-condition-down"
-                )
-
-                st.markdown(
-                    (
-                        '<div class="history-alarm-row">'
-                        '<div class="alarm-row-top">'
-                        f'<span>{asset_name}</span>'
-                        f'<span>{item["target_value"]:.4f}</span>'
-                        '</div>'
-                        '<div class="alarm-row-bottom">'
-                        f'<span class="{condition_class}">{direction}</span>'
-                        f'<span>{item["triggered_at"]}</span>'
-                        '</div>'
-                        '</div>'
-                    ),
-                    unsafe_allow_html=True,
-                )
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-st.markdown(
-    '<div class="section-kicker section-summary" style="margin-top:28px;">PİYASA ÖZETİ</div>',
-    unsafe_allow_html=True,
-)
-
-positive_count = sum(
-    1
-    for item in changes_24h.values()
-    if item["pct"] > 0
-)
-
-if positive_count >= 4:
-    market_mood = "Pozitif"
-    mood_class = "insight-positive"
-    mood_text = "Alım yönlü momentum"
-
-elif positive_count <= 1:
-    market_mood = "Negatif"
-    mood_class = "insight-negative"
-    mood_text = "Satış baskısı güçlü"
-
-else:
-    market_mood = "Dengeli"
-    mood_class = "insight-neutral"
-    mood_text = "Karışık piyasa görünümü"
-
-
-insight_cols = st.columns(
-    4,
-    gap="medium",
-)
-
-
-with insight_cols[0]:
-
-    st.markdown(
-        (
-            '<div class="insight-card">'
-            '<div class="insight-label">En Güçlü Varlık</div>'
-            f'<div class="insight-value">{name_map[max_gained[0]]}</div>'
-            f'<div class="insight-positive">↗ {max_gained[1]["pct"]:.2f}%</div>'
-            '</div>'
-        ),
-        unsafe_allow_html=True,
-    )
-
-
-with insight_cols[1]:
-
-    loser_pct = max_dropped[1]["pct"]
-
-    loser_class = (
-        "insight-negative"
-        if loser_pct < 0
-        else "insight-positive"
-    )
-
-    st.markdown(
-        (
-            '<div class="insight-card">'
-            '<div class="insight-label">En Zayıf Varlık</div>'
-            f'<div class="insight-value">{name_map[max_dropped[0]]}</div>'
-            f'<div class="{loser_class}">{loser_pct:.2f}%</div>'
-            '</div>'
-        ),
-        unsafe_allow_html=True,
-    )
-
-
-with insight_cols[2]:
-
-    st.markdown(
-        (
-            '<div class="insight-card">'
-            '<div class="insight-label">Volatilite Lideri</div>'
-            f'<div class="insight-value">{name_map[max_volatile_key]}</div>'
-            f'<div class="insight-neutral">⚡ {max_volatility_val:.2f}% volatilite</div>'
-            '</div>'
-        ),
-        unsafe_allow_html=True,
-    )
-
-
-with insight_cols[3]:
-
-    st.markdown(
-        (
-            '<div class="insight-card">'
-            '<div class="insight-label">Piyasa Görünümü</div>'
-            f'<div class="insight-value">{market_mood}</div>'
-            f'<div class="{mood_class}">{mood_text}</div>'
-            '</div>'
-        ),
-        unsafe_allow_html=True,
     )
 
 def show_statistics(df, column, suffix):
@@ -1720,173 +975,6 @@ def show_market_chart(
         suffix,
     )
 
-df = df_all.copy()
-
-if "market_period_filter" not in st.session_state:
-    st.session_state.market_period_filter = "Tüm Veriler"
-
-period = st.session_state.market_period_filter
-
-now = datetime.now()
-
-if period == "Son 1 Saat":
-    df = df[df["timestamp"] >= now - timedelta(hours=1)]
-elif period == "Son 24 Saat":
-    df = df[df["timestamp"] >= now - timedelta(days=1)]
-elif period == "Son 7 Gün":
-    df = df[df["timestamp"] >= now - timedelta(days=7)]
-
-if df.empty:
-
-    st.info(
-        "Seçilen zaman aralığında veri bulunmuyor."
-    )
-
-else:
-
-    # =====================================================
-    # ALTIN ANALİZİ
-    # =====================================================
-
-    gold_section_html = (
-        '<div style="margin-top:18px;margin-bottom:24px;">'
-        '<div style="color:#B45309;font-size:14px;font-weight:850;letter-spacing:1px;">DEĞERLİ METALLER</div>'
-        '<div style="color:#92400E;font-size:30px;font-weight:850;letter-spacing:-0.6px;margin-top:5px;">Altın Analizi</div>'
-        '<div style="color:#475569;font-size:16px;line-height:1.65;margin-top:7px;">'
-        'Gram ve ons altındaki fiyat hareketlerini, trendleri ve istatistikleri rahatça inceleyin.'
-        '</div></div>'
-    )
-
-    st.markdown(gold_section_html, unsafe_allow_html=True)
-
-    gold_col1, gold_col2 = st.columns(
-        2,
-        gap="large",
-    )
-
-    with gold_col1:
-
-            with st.container(border=True):
-                show_market_chart(
-                    df=df,
-                    column="gold_gram",
-                    title="Gram Altın",
-                    suffix="TL",
-                    line_color="#FACC15",
-                    precision=2,
-                )
-
-    with gold_col2:
-
-            with st.container(border=True):
-                show_market_chart(
-                    df=df,
-                    column="gold_ounce",
-                    title="Ons Altın",
-                    suffix="$",
-                    line_color="#FB923C",
-                    precision=2,
-                )
-
-
-    st.markdown(
-        '<div style="height:1px;'
-        'background:linear-gradient(90deg,transparent,#DCE4EE,transparent);'
-        'margin:38px 0 30px 0;"></div>',
-        unsafe_allow_html=True,
-    )
-
-
-    # =====================================================
-    # DÖVİZ ANALİZİ
-    # =====================================================
-
-    fx_section_html = (
-        '<div style="margin-top:18px;margin-bottom:24px;">'
-        '<div style="color:#1D4ED8;font-size:14px;font-weight:850;letter-spacing:1px;">DÖVİZ PİYASASI</div>'
-        '<div style="color:#1E3A8A;font-size:30px;font-weight:850;letter-spacing:-0.6px;margin-top:5px;">Döviz Analizi</div>'
-        '<div style="color:#475569;font-size:16px;line-height:1.65;margin-top:7px;">'
-        'USD, EUR ve GBP kurlarındaki kısa ve orta vadeli piyasa hareketlerini daha okunaklı grafiklerle takip edin.'
-        '</div></div>'
-    )
-
-    st.markdown(fx_section_html, unsafe_allow_html=True)
-
-    with st.container(border=True):
-        show_market_chart(
-            df=df,
-            column="usd_try",
-            title="USD / TRY",
-            suffix="TL",
-            line_color="#22D3EE",
-            precision=4,
-        )
-
-    st.markdown(
-        '<div style="height:18px;"></div>',
-        unsafe_allow_html=True,
-    )
-
-    with st.container(border=True):
-        show_market_chart(
-            df=df,
-            column="eur_try",
-            title="EUR / TRY",
-            suffix="TL",
-            line_color="#60A5FA",
-            precision=4,
-        )
-
-    st.markdown(
-        '<div style="height:18px;"></div>',
-        unsafe_allow_html=True,
-    )
-
-    with st.container(border=True):
-        show_market_chart(
-            df=df,
-            column="gbp_try",
-            title="GBP / TRY",
-            suffix="TL",
-            line_color="#A78BFA",
-            precision=4,
-        )
-
-st.markdown(
-    '<div style="height:1px;'
-    'background:linear-gradient(90deg,transparent,#DCE4EE,transparent);'
-    'margin:40px 0 28px 0;"></div>',
-    unsafe_allow_html=True,
-)
-
-# =====================================================
-# MARKET DATA
-# =====================================================
-
-df_table = df.sort_values(
-    "timestamp",
-    ascending=False,
-).copy()
-
-record_count = len(df_table)
-
-database_header_html = (
-    '<div style="margin-top:16px;margin-bottom:20px;">'
-    '<div style="color:#047857;font-size:14px;font-weight:850;letter-spacing:1px;">PİYASA VERİTABANI</div>'
-    '<div style="color:#065F46;font-size:30px;font-weight:850;letter-spacing:-0.6px;margin-top:5px;">Piyasa Verileri</div>'
-    '<div style="color:#475569;font-size:16px;line-height:1.65;margin-top:7px;">'
-    'Kaydedilen geçmiş döviz ve altın piyasa verilerini inceleyin veya CSV formatında dışa aktarın.'
-    '</div></div>'
-)
-
-st.markdown(database_header_html, unsafe_allow_html=True)
-
-info_col1, info_col2, info_col3 = st.columns(
-    3,
-    gap="medium",
-)
-
-
 def database_info_card(label, value):
 
     card_html = (
@@ -1921,29 +1009,922 @@ def database_info_card(label, value):
         unsafe_allow_html=True,
     )
 
+st_autorefresh(
+    interval=10000,
+    key="datarefresh"
+)
 
-with info_col1:
 
-    database_info_card(
-        "TOPLAM KAYIT",
-        record_count,
+last_alert = get_new_alert()
+show_alert = should_show_alert(last_alert)
+
+if show_alert:
+    alert_id = last_alert["id"]
+
+    alert_name = ALERT_NAME_MAP.get(
+        last_alert["metric"],
+        last_alert["metric"],
     )
 
+    if should_play_alarm_sound(alert_id):
+        components.html(
+            """
+            <script>
+            try {
+                const AudioContextClass =
+                    window.AudioContext || window.webkitAudioContext;
 
-with info_col2:
+                const audioCtx = new AudioContextClass();
 
-    database_info_card(
-        "SON GÜNCELLEME",
-        formatted_time,
+                function beep(startTime, frequency, duration, volume) {
+                    const oscillator = audioCtx.createOscillator();
+                    const gainNode = audioCtx.createGain();
+
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+
+                    oscillator.type = "square";
+                    oscillator.frequency.setValueAtTime(
+                        frequency,
+                        startTime
+                    );
+
+                    gainNode.gain.setValueAtTime(
+                        volume,
+                        startTime
+                    );
+
+                    gainNode.gain.exponentialRampToValueAtTime(
+                        0.001,
+                        startTime + duration
+                    );
+
+                    oscillator.start(startTime);
+                    oscillator.stop(startTime + duration);
+                }
+
+                const now = audioCtx.currentTime;
+
+                beep(now, 1000, 0.18, 0.28);
+                beep(now + 0.28, 1200, 0.18, 0.28);
+                beep(now + 0.56, 1000, 0.25, 0.32);
+
+            } catch (e) {
+                console.log("Alarm sesi çalınamadı:", e);
+            }
+            </script>
+            """,
+            height=0,
+        )
+
+        mark_alarm_sound_as_played(alert_id)
+
+    st.markdown(
+        """
+        <style>
+        .st-key-triggered_alarm_banner {
+            background: #FFFFFF !important;
+            border: 1px solid #FCA5A5 !important;
+            border-left: 6px solid #EF4444 !important;
+            border-radius: 14px !important;
+            padding: 12px 16px !important;
+            box-shadow: 0 10px 26px rgba(15, 23, 42, 0.10) !important;
+        }
+
+        .st-key-triggered_alarm_banner .alarm-wrapper {
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            background: transparent !important;
+            box-shadow: none !important;
+        }
+
+        .st-key-triggered_alarm_banner .alarm-header {
+            margin-bottom: 10px !important;
+            color: #DC2626 !important;
+            font-size: 18px !important;
+            font-weight: 850 !important;
+            line-height: 1.3 !important;
+        }
+
+        .st-key-triggered_alarm_banner .alarm-asset {
+            margin-bottom: 7px !important;
+            color: #0F172A !important;
+            font-size: 17px !important;
+            font-weight: 850 !important;
+        }
+
+        .st-key-triggered_alarm_banner .alarm-info {
+            color: #475569 !important;
+            font-size: 14px !important;
+            line-height: 1.5 !important;
+            margin-bottom: 18px !important;
+        }
+
+        .st-key-triggered_alarm_banner .alarm-current {
+            color: #0F172A !important;
+            font-weight: 850 !important;
+        }
+
+        .st-key-triggered_alarm_banner .alarm-target {
+            color: #D97706 !important;
+            font-weight: 850 !important;
+        }
+
+        .st-key-triggered_alarm_banner button {
+            width: 40px !important;
+            min-width: 40px !important;
+            height: 40px !important;
+            min-height: 40px !important;
+            padding: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background: #FFFFFF !important;
+            color: #64748B !important;
+            border: 1px solid #CBD5E1 !important;
+            border-radius: 10px !important;
+            box-shadow: none !important;
+        }
+
+        .st-key-triggered_alarm_banner button:hover {
+            background: #FEF2F2 !important;
+            color: #DC2626 !important;
+            border-color: #FCA5A5 !important;
+        }
+
+        .st-key-triggered_alarm_banner button p {
+            margin: 0 !important;
+            padding: 0 !important;
+            color: inherit !important;
+            font-size: 18px !important;
+            line-height: 1 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
+    with st.container(
+        border=True,
+        key="triggered_alarm_banner",
+    ):
+        content_col, close_col = st.columns(
+            [18, 1],
+            vertical_alignment="top",
+        )
 
-with info_col3:
+        with content_col:
+            alarm_html = (
+                '<div class="alarm-wrapper">'
+                '<div class="alarm-header">'
+                '🚨 Fiyat Alarmı Tetiklendi'
+                '</div>'
+                f'<div class="alarm-asset">{alert_name}</div>'
+                '<div class="alarm-info">'
+                'Güncel Fiyat: '
+                f'<span class="alarm-current">'
+                f'{last_alert["current_value"]:.4f}'
+                '</span>'
+                '<br>'
+                'Alarm Koşulu: '
+                f'<span class="alarm-target">'
+                f'{last_alert["condition"]} '
+                f'{last_alert["target_value"]:.4f}'
+                '</span>'
+                '</div>'
+                '</div>'
+            )
 
-    database_info_card(
-        "TAKİP EDİLEN VARLIK",
-        "5",
+            st.markdown(
+                alarm_html,
+                unsafe_allow_html=True,
+            )
+
+        with close_col:
+            st.markdown(
+                "<div style='height:6px'></div>",
+                unsafe_allow_html=True,
+            )
+
+            if st.button(
+                "✕",
+                key=f"dismiss_alert_{alert_id}",
+                help="Kapat",
+                type="secondary",
+                use_container_width=True,
+            ):
+                dismiss_alert()
+                st.rerun()
+                
+header_html = (
+    '<div class="hero-card">'
+    '<div class="hero-top">'
+    '<div>'
+    '<div class="hero-eyebrow">FİNANSAL PİYASA TAKİP PANELİ</div>'
+    '<div class="hero-title">'
+    'Canlı Altın ve Döviz Takip Sistemi'
+    '</div>'
+    '<div class="hero-subtitle">'
+    'Gerçek zamanlı döviz ve altın fiyatlarını izleyin, '
+    'piyasa hareketlerini analiz edin ve belirlediğiniz '
+    'fiyat seviyeleri için anlık alarm oluşturun.'
+    '</div>'
+    '</div>'
+    '<div class="live-pill">'
+    '<span class="live-dot"></span>'
+    '<span>CANLI PİYASA</span>'
+    '</div>'
+    '</div>'
+    '</div>'
+)
+
+st.markdown(
+    header_html,
+    unsafe_allow_html=True,
+)
+
+latest = get_latest_market_data()
+data_all = get_all_market_data()
+df_all = pd.DataFrame(data_all)
+
+if latest is None or df_all.empty:
+    st.warning("Henüz veritabanında yeterli veri bulunmuyor.")
+    st.stop()
+
+df_all["timestamp"] = pd.to_datetime(df_all["timestamp"])
+last_time = pd.to_datetime(latest["timestamp"])
+formatted_time = last_time.strftime("%d.%m.%Y %H:%M:%S")
+
+last_update_html = (
+    '<div style="background:#FFFFFF;padding:11px 16px;border:1px solid #DCE4EE;'
+    'border-left:4px solid #2563EB;display:flex;align-items:center;gap:9px;'
+    'margin-top:8px;margin-bottom:16px;box-shadow:0 4px 14px rgba(15,23,42,0.04);">'
+    '<span style="font-size:14px;color:#475569;font-weight:700;">SON VERİ GİRİŞİ</span>'
+    f'<strong style="font-size:14px;color:#0F172A;font-weight:800;">{formatted_time}</strong>'
+    '</div>'
+)
+
+st.markdown(last_update_html, unsafe_allow_html=True)
+
+changes_24h, volatility_24h = calculate_24h_analysis(
+    df_all,
+    latest,
+    METRICS,
+)
+
+ticker_items = []
+
+for _ in range(2):
+    for title, key in TICKER_ASSETS:
+        value = latest[key]
+        change = changes_24h[key]["pct"]
+
+        if change >= 0:
+            arrow = "▲"
+            cls = "ticker-up"
+        else:
+            arrow = "▼"
+            cls = "ticker-down"
+
+        value_text = f"{value:.2f}" if "gold" in key else f"{value:.4f}"
+
+        ticker_items.append(
+            f'<span class="ticker-item">'
+            f'<span class="ticker-price">{title}</span>'
+            f'<span class="ticker-price">{value_text}</span>'
+            f'<span class="{cls}">{arrow} {abs(change):.2f}%</span>'
+            f'</span>'
+        )
+
+ticker_html = (
+    '<div class="top-ticker">'
+    '<div class="top-ticker-label">📡 CANLI PİYASA</div>'
+    '<div class="top-ticker-window">'
+    '<div class="top-ticker-track">'
+    + "".join(ticker_items)
+    + '</div></div></div>'
+)
+
+st.markdown(
+    ticker_html,
+    unsafe_allow_html=True,
+)
+
+(
+    max_dropped,
+    max_gained,
+    max_volatile_key,
+    max_volatility_val,
+) = get_market_leaders(
+    changes_24h,
+    volatility_24h,
+)
+
+st.markdown(
+    '<div class="section-kicker section-prices" style="margin-top:18px;">'
+    'CANLI PİYASA FİYATLARI'
+    '</div>',
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    '<div class="price-group-title fx">DÖVİZ</div>',
+    unsafe_allow_html=True,
+)
+
+fx_prices_html = (
+    '<div class="price-strip fx-grid">'
+    + build_price_item(
+        "usd_try",
+        "ABD DOLARI",
+        f"{latest['usd_try']:.4f}",
+        "TRY",
+        "price-usd",
+        changes_24h,
+        volatility_24h,
     )
+    + build_price_item(
+        "eur_try",
+        "EURO",
+        f"{latest['eur_try']:.4f}",
+        "TRY",
+        "price-eur",
+        changes_24h,
+        volatility_24h,
+    )
+    + build_price_item(
+        "gbp_try",
+        "İNGİLİZ STERLİNİ",
+        f"{latest['gbp_try']:.4f}",
+        "TRY",
+        "price-gbp",
+        changes_24h,
+        volatility_24h,
+    )
+    + '</div>'
+)
+
+st.markdown(
+    fx_prices_html,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    '<div class="price-group-title gold">ALTIN</div>',
+    unsafe_allow_html=True,
+)
+
+gold_prices_html = (
+    '<div class="price-strip gold-grid">'
+    + build_price_item(
+        "gold_gram",
+        "GRAM ALTIN",
+        f"{latest['gold_gram']:.2f}",
+        "TRY",
+        "price-gram",
+        changes_24h,
+        volatility_24h,
+    )
+    + build_price_item(
+        "gold_ounce",
+        "ONS ALTIN",
+        f"{latest['gold_ounce']:.2f}",
+        "USD",
+        "price-ounce",
+        changes_24h,
+        volatility_24h,
+    )
+    + '</div>'
+)
+
+st.markdown(
+    gold_prices_html,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    '<div class="alarm-section-title">ALARM MERKEZİ</div>',
+    unsafe_allow_html=True,
+)
+
+alarm_form_col, active_alarm_col, history_col = st.columns(
+    [1.15, 1, 1],
+    gap="small",
+)
+
+with alarm_form_col:
+    with st.container(
+        border=True,
+        height=355,
+        key="alarm_create_card",
+    ):
+        st.markdown(
+            '<div class="alarm-panel-title">🔔 Alarm Merkezi</div>',
+            unsafe_allow_html=True,
+        )
+
+        asset_col, current_col, condition_col = st.columns(
+            [1.1, 0.9, 1.2],
+            gap="small",
+        )
+
+        with asset_col:
+            alert_metric = st.selectbox(
+                "VARLIK",
+                options=METRICS,
+                format_func=lambda x: NAME_MAP[x],
+                key="main_alert_metric_select",
+            )
+
+        current_asset_value = float(latest[alert_metric])
+
+        with current_col:
+            st.markdown(
+                '<div class="alarm-field-label">MEVCUT FİYAT</div>',
+                unsafe_allow_html=True,
+            )
+
+            st.markdown(
+                (
+                    '<div class="alarm-current-price">'
+                    f'{current_asset_value:.4f}'
+                    '</div>'
+                ),
+                unsafe_allow_html=True,
+            )
+
+        with condition_col:
+            alert_condition = st.selectbox(
+                "KOŞUL",
+                options=[">", "<"],
+                format_func=lambda value: (
+                    "↗ Üzerine çıkarsa"
+                    if value == ">"
+                    else "↘ Altına düşerse"
+                ),
+                key="main_alert_condition",
+            )
+
+        target_col, button_col = st.columns(
+            [1.35, 1],
+            gap="small",
+            vertical_alignment="bottom",
+        )
+
+        with target_col:
+            alert_target_str = st.text_input(
+                "HEDEF FİYAT",
+                value=f"{current_asset_value:.4f}",
+                key=f"main_target_input_{alert_metric}",
+            )
+
+        with button_col:
+            create_alarm_clicked = st.button(
+                "＋ ALARM OLUŞTUR",
+                use_container_width=True,
+                type="primary",
+                key="main_create_alert",
+            )
+
+        if create_alarm_clicked:
+            try:
+                alert_target = float(alert_target_str)
+
+                is_already_passed = (
+                    alert_condition == ">"
+                    and current_asset_value > alert_target
+                ) or (
+                    alert_condition == "<"
+                    and current_asset_value < alert_target
+                )
+
+                if is_already_passed:
+                    direction_text = (
+                        "üzerinde"
+                        if alert_condition == ">"
+                        else "altında"
+                    )
+
+                    st.warning(
+                        "Mevcut fiyat zaten hedef değerin "
+                        f"{direction_text}. Farklı bir hedef girin."
+                    )
+
+                elif alert_exists(
+                    alert_metric,
+                    alert_condition,
+                    alert_target,
+                ):
+                    st.warning(
+                        "Bu kriterlere sahip aktif bir alarm zaten mevcut."
+                    )
+
+                else:
+                    insert_alert(
+                        alert_metric,
+                        alert_condition,
+                        alert_target,
+                    )
+
+                    st.success(
+                        f"Alarm oluşturuldu: {NAME_MAP[alert_metric]} "
+                        f"{alert_condition} {alert_target:.4f}"
+                    )
+
+                    st.rerun()
+
+            except ValueError:
+                st.error("Lütfen geçerli bir hedef fiyat girin.")
+
+        st.markdown(
+            (
+                '<div class="alarm-helper">'
+                'ⓘ Belirlediğiniz koşul gerçekleştiğinde '
+                'anlık bildirim alırsınız.'
+                '</div>'
+            ),
+            unsafe_allow_html=True,
+        )
+
+
+with active_alarm_col:
+    with st.container(
+        border=True,
+        height=355,
+        key="active_alerts_card",
+    ):
+        current_active = get_active_alerts()
+
+        st.markdown(
+            f'<div class="alarm-panel-title">↗ Aktif Alarmlar ({len(current_active)})</div>',
+            unsafe_allow_html=True,
+        )
+
+        if not current_active:
+            st.markdown(
+                '<div class="alarm-empty">Bekleyen aktif alarm bulunmuyor.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            for act in current_active[:5]:
+                asset_name = NAME_MAP[act["metric"]]
+                is_above = act["condition"] == ">"
+                condition_text = (
+                    "Üzerine çıkarsa"
+                    if is_above
+                    else "Altına düşerse"
+                )
+                condition_class = (
+                    "alarm-condition-up"
+                    if is_above
+                    else "alarm-condition-down"
+                )
+                current_value = float(latest[act["metric"]])
+
+                row_col, delete_col = st.columns(
+                    [7, 1],
+                    vertical_alignment="center",
+                )
+
+                with row_col:
+                    st.markdown(
+                        (
+                            '<div class="active-alarm-row">'
+                            '<div class="alarm-row-top">'
+                            f'<span>{asset_name}</span>'
+                            f'<span>{act["target_value"]:.4f}</span>'
+                            '</div>'
+                            '<div class="alarm-row-bottom">'
+                            f'<span class="{condition_class}">{condition_text}</span>'
+                            f'<span>Mevcut: {current_value:.4f}</span>'
+                            '</div>'
+                            '</div>'
+                        ),
+                        unsafe_allow_html=True,
+                    )
+
+                with delete_col:
+                    if st.button(
+                        "🗑",
+                        key=f"main_del_{act['id']}",
+                        help="Alarmı sil",
+                        use_container_width=True,
+                    ):
+                        delete_alert(act["id"])
+                        st.rerun()
+
+with history_col:
+    with st.container(
+        border=True,
+        height=355,
+        key="alert_history_card",
+    ):
+        history = get_alert_history()
+
+        st.markdown(
+            '<div class="alarm-panel-title">◷ Alarm Geçmişi</div>',
+            unsafe_allow_html=True,
+        )
+
+        if not history:
+            st.markdown(
+                '<div class="alarm-empty">Henüz tetiklenen alarm bulunmuyor.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            for item in history[:4]:
+                asset_name = NAME_MAP[item["metric"]]
+                is_above = item["condition"] == ">"
+                direction = "Üzerine çıktı" if is_above else "Altına düştü"
+                condition_class = (
+                    "alarm-condition-up"
+                    if is_above
+                    else "alarm-condition-down"
+                )
+
+                st.markdown(
+                    (
+                        '<div class="history-alarm-row">'
+                        '<div class="alarm-row-top">'
+                        f'<span>{asset_name}</span>'
+                        f'<span>{item["target_value"]:.4f}</span>'
+                        '</div>'
+                        '<div class="alarm-row-bottom">'
+                        f'<span class="{condition_class}">{direction}</span>'
+                        f'<span>{item["triggered_at"]}</span>'
+                        '</div>'
+                        '</div>'
+                    ),
+                    unsafe_allow_html=True,
+                )
+
+
+st.markdown(
+    '<div class="section-kicker section-summary" style="margin-top:28px;">PİYASA ÖZETİ</div>',
+    unsafe_allow_html=True,
+)
+
+positive_count = sum(
+    1
+    for item in changes_24h.values()
+    if item["pct"] > 0
+)
+
+if positive_count >= 4:
+    market_mood = "Pozitif"
+    mood_class = "insight-positive"
+    mood_text = "Alım yönlü momentum"
+
+elif positive_count <= 1:
+    market_mood = "Negatif"
+    mood_class = "insight-negative"
+    mood_text = "Satış baskısı güçlü"
+
+else:
+    market_mood = "Dengeli"
+    mood_class = "insight-neutral"
+    mood_text = "Karışık piyasa görünümü"
+
+
+insight_cols = st.columns(
+    4,
+    gap="medium",
+)
+
+loser_pct = max_dropped[1]["pct"]
+
+loser_class = (
+    "insight-negative"
+    if loser_pct < 0
+    else "insight-positive"
+)
+
+insight_cards = [
+    {
+        "label": "En Güçlü Varlık",
+        "value": NAME_MAP[max_gained[0]],
+        "detail": f'↗ {max_gained[1]["pct"]:.2f}%',
+        "detail_class": "insight-positive",
+    },
+    {
+        "label": "En Zayıf Varlık",
+        "value": NAME_MAP[max_dropped[0]],
+        "detail": f"{loser_pct:.2f}%",
+        "detail_class": loser_class,
+    },
+    {
+        "label": "Volatilite Lideri",
+        "value": NAME_MAP[max_volatile_key],
+        "detail": f"⚡ {max_volatility_val:.2f}% volatilite",
+        "detail_class": "insight-neutral",
+    },
+    {
+        "label": "Piyasa Görünümü",
+        "value": market_mood,
+        "detail": mood_text,
+        "detail_class": mood_class,
+    },
+]
+
+for column, card in zip(
+    insight_cols,
+    insight_cards,
+):
+    with column:
+        st.markdown(
+            (
+                '<div class="insight-card">'
+                f'<div class="insight-label">{card["label"]}</div>'
+                f'<div class="insight-value">{card["value"]}</div>'
+                f'<div class="{card["detail_class"]}">'
+                f'{card["detail"]}'
+                '</div>'
+                '</div>'
+            ),
+            unsafe_allow_html=True,
+        )
+
+df = df_all.copy()
+
+if "market_period_filter" not in st.session_state:
+    st.session_state.market_period_filter = "Tüm Veriler"
+
+period = st.session_state.market_period_filter
+
+now = datetime.now()
+
+if period == "Son 1 Saat":
+    df = df[df["timestamp"] >= now - timedelta(hours=1)]
+elif period == "Son 24 Saat":
+    df = df[df["timestamp"] >= now - timedelta(days=1)]
+elif period == "Son 7 Gün":
+    df = df[df["timestamp"] >= now - timedelta(days=7)]
+
+if df.empty:
+
+    st.info(
+        "Seçilen zaman aralığında veri bulunmuyor."
+    )
+
+else:
+
+    gold_section_html = (
+        '<div style="margin-top:18px;margin-bottom:24px;">'
+        '<div style="color:#B45309;font-size:14px;font-weight:850;letter-spacing:1px;">DEĞERLİ METALLER</div>'
+        '<div style="color:#92400E;font-size:30px;font-weight:850;letter-spacing:-0.6px;margin-top:5px;">Altın Analizi</div>'
+        '<div style="color:#475569;font-size:16px;line-height:1.65;margin-top:7px;">'
+        'Gram ve ons altındaki fiyat hareketlerini, trendleri ve istatistikleri rahatça inceleyin.'
+        '</div></div>'
+    )
+
+    st.markdown(gold_section_html, unsafe_allow_html=True)
+
+    gold_charts = [
+        {
+            "column": "gold_gram",
+            "title": "Gram Altın",
+            "suffix": "TL",
+            "line_color": "#FACC15",
+            "precision": 2,
+        },
+        {
+            "column": "gold_ounce",
+            "title": "Ons Altın",
+            "suffix": "$",
+            "line_color": "#FB923C",
+            "precision": 2,
+        },
+    ]
+
+    gold_columns = st.columns(
+        len(gold_charts),
+        gap="large",
+    )
+
+    for chart_column, chart_config in zip(
+        gold_columns,
+        gold_charts,
+    ):
+        with chart_column:
+            with st.container(border=True):
+                show_market_chart(
+                    df=df,
+                    column=chart_config["column"],
+                    title=chart_config["title"],
+                    suffix=chart_config["suffix"],
+                    line_color=chart_config["line_color"],
+                    precision=chart_config["precision"],
+                )
+
+
+    st.markdown(
+        '<div style="height:1px;'
+        'background:linear-gradient(90deg,transparent,#DCE4EE,transparent);'
+        'margin:38px 0 30px 0;"></div>',
+        unsafe_allow_html=True,
+    )
+
+fx_section_html = (
+    '<div style="margin-top:18px;margin-bottom:24px;">'
+    '<div style="color:#1D4ED8;font-size:14px;font-weight:850;letter-spacing:1px;">DÖVİZ PİYASASI</div>'
+    '<div style="color:#1E3A8A;font-size:30px;font-weight:850;letter-spacing:-0.6px;margin-top:5px;">Döviz Analizi</div>'
+    '<div style="color:#475569;font-size:16px;line-height:1.65;margin-top:7px;">'
+    'USD, EUR ve GBP kurlarındaki kısa ve orta vadeli piyasa hareketlerini daha okunaklı grafiklerle takip edin.'
+    '</div></div>'
+)
+
+st.markdown(
+    fx_section_html,
+    unsafe_allow_html=True,
+)
+
+fx_charts = [
+    {
+        "column": "usd_try",
+        "title": "USD / TRY",
+        "suffix": "TL",
+        "line_color": "#22D3EE",
+        "precision": 4,
+    },
+    {
+        "column": "eur_try",
+        "title": "EUR / TRY",
+        "suffix": "TL",
+        "line_color": "#60A5FA",
+        "precision": 4,
+    },
+    {
+        "column": "gbp_try",
+        "title": "GBP / TRY",
+        "suffix": "TL",
+        "line_color": "#A78BFA",
+        "precision": 4,
+    },
+]
+
+for index, chart in enumerate(fx_charts):
+    with st.container(border=True):
+        show_market_chart(
+            df=df,
+            column=chart["column"],
+            title=chart["title"],
+            suffix=chart["suffix"],
+            line_color=chart["line_color"],
+            precision=chart["precision"],
+        )
+
+    if index < len(fx_charts) - 1:
+        st.markdown(
+            '<div style="height:18px;"></div>',
+            unsafe_allow_html=True,
+        )
+
+st.markdown(
+    '<div style="height:1px;'
+    'background:linear-gradient(90deg,transparent,#DCE4EE,transparent);'
+    'margin:40px 0 28px 0;"></div>',
+    unsafe_allow_html=True,
+)
+
+df_table = df.sort_values(
+    "timestamp",
+    ascending=False,
+).copy()
+
+record_count = len(df_table)
+
+database_header_html = (
+    '<div style="margin-top:16px;margin-bottom:20px;">'
+    '<div style="color:#047857;font-size:14px;font-weight:850;letter-spacing:1px;">PİYASA VERİTABANI</div>'
+    '<div style="color:#065F46;font-size:30px;font-weight:850;letter-spacing:-0.6px;margin-top:5px;">Piyasa Verileri</div>'
+    '<div style="color:#475569;font-size:16px;line-height:1.65;margin-top:7px;">'
+    'Kaydedilen geçmiş döviz ve altın piyasa verilerini inceleyin veya CSV formatında dışa aktarın.'
+    '</div></div>'
+)
+
+st.markdown(database_header_html, unsafe_allow_html=True)
+
+info_cols = st.columns(
+    3,
+    gap="medium",
+)
+
+database_cards = [
+    ("TOPLAM KAYIT", record_count),
+    ("SON GÜNCELLEME", formatted_time),
+    ("TAKİP EDİLEN VARLIK", len(METRICS)),
+]
+
+for column, (label, value) in zip(
+    info_cols,
+    database_cards,
+):
+    with column:
+        database_info_card(
+            label,
+            value,
+        )
 
 st.markdown(
     '<div style="height:14px;"></div>',
@@ -1966,7 +1947,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-filter_col, empty_col = st.columns(
+filter_col, _ = st.columns(
     [1.1, 3.9],
     gap="medium",
 )
