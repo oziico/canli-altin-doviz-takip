@@ -15,3 +15,4 @@ market_data.db
 .streamlit/
 
 .env
+.pytest_cache/
