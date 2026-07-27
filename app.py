@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_autorefresh import st_autorefresh
@@ -82,7 +83,6 @@ div[data-testid="collapsedControl"] {
     padding: 44px 3rem 4rem !important;
 }
 
-/* SABİT KAYAN PİYASA BANDI */
 .top-ticker {
     position: fixed;
     inset: 0 0 auto 0;
@@ -147,7 +147,6 @@ div[data-testid="collapsedControl"] {
 .ticker-up { color: #22C55E; }
 .ticker-down { color: #F87171; }
 
-/* HERO */
 .hero-card {
     width: 100% !important;
     margin: 0 0 12px !important;
@@ -216,7 +215,6 @@ div[data-testid="collapsedControl"] {
     box-shadow: 0 0 0 4px rgba(16, 185, 129, .12);
 }
 
-/* BAŞLIKLAR */
 .section-kicker {
     margin: 20px 0 14px;
     font-size: 15px;
@@ -237,7 +235,6 @@ div[data-testid="collapsedControl"] {
 .price-group-title.fx { color: #1D4ED8; }
 .price-group-title.gold { color: #B45309; }
 
-/* FİYAT KARTLARI */
 .price-strip {
     display: grid;
     overflow: hidden;
@@ -309,7 +306,6 @@ div[data-testid="collapsedControl"] {
     font-weight: 750;
 }
 
-/* GENEL KARTLAR */
 div[data-testid="stVerticalBlockBorderWrapper"] {
     background: #FFFFFF !important;
     border: 1px solid var(--border) !important;
@@ -318,7 +314,6 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
     box-shadow: 0 8px 22px rgba(15, 23, 42, .055) !important;
 }
 
-/* ALARM MERKEZİ */
 .alarm-section-title {
     margin: 18px 0 10px;
     color: #1E3A8A;
@@ -452,7 +447,6 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
     text-align: center;
 }
 
-/* PİYASA ÖZETİ */
 .insight-card {
     min-height: 125px;
     padding: 20px;
@@ -481,7 +475,6 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
 .insight-negative { margin-top: 6px; color: #B91C1C; font-size: 14px; font-weight: 700; }
 .insight-neutral { margin-top: 6px; color: #475569; font-size: 14px; font-weight: 700; }
 
-/* FORM ELEMANLARI */
 div[data-baseweb="select"] > div,
 div[data-baseweb="input"] > div,
 input {
@@ -494,7 +487,6 @@ label {
     color: #334155 !important;
 }
 
-/* TABLO VE İNDİRME */
 div[data-testid="stDataFrame"],
 div[data-testid="stDataFrame"] > div {
     background: #FFFFFF !important;
@@ -511,7 +503,6 @@ div[data-testid="stDataFrame"] > div {
     background: #F8FAFC !important;
 }
 
-/* MOBİL */
 @media (max-width: 850px) {
     .block-container,
     [data-testid="stMainBlockContainer"] {
@@ -552,8 +543,6 @@ div[data-testid="stDataFrame"] > div {
     }
 }
 
-/* Streamlit uyarı mesajlarının yazı renkleri */
-
 div[data-testid="stAlert"] {
     color: #7C5A00 !important;
 }
@@ -564,12 +553,63 @@ div[data-testid="stAlert"] div {
     color: #7C5A00 !important;
 }
 
-/* Hata mesajı */
 div[data-testid="stAlert"][data-baseweb="notification"] {
     font-weight: 700;
 }
 
-/* Aktif alarm silme butonu */
+div[data-testid="stRadio"] > div {
+    gap: 8px !important;
+}
+
+div[data-testid="stRadio"] label {
+    padding: 6px 11px !important;
+    border: 1px solid #CBD5E1 !important;
+    border-radius: 8px !important;
+    background: #FFFFFF !important;
+}
+
+div[data-testid="stRadio"] label [data-testid="stMarkdownContainer"] p {
+    color: #0F172A !important;
+    -webkit-text-fill-color: #0F172A !important;
+    opacity: 1 !important;
+}
+
+div[data-testid="stRadio"] label:has(input:checked) {
+    border-color: #2563EB !important;
+    background: #EFF6FF !important;
+}
+
+div[data-testid="stRadio"] label > div:first-child {
+    background: #F1F5F9 !important;
+    border-color: #CBD5E1 !important;
+    box-shadow: none !important;
+}
+
+div[data-testid="stRadio"] label:has(input:checked) > div:first-child {
+    background: #E2E8F0 !important;
+    border-color: #94A3B8 !important;
+}
+
+div[data-testid="stCheckbox"] label {
+    font-weight: 750 !important;
+}
+
+
+div[data-testid="stCheckbox"] label > span:first-child {
+    background: #F1F5F9 !important;
+    border-color: #CBD5E1 !important;
+    box-shadow: none !important;
+}
+
+div[data-testid="stCheckbox"] label:has(input:checked) > span:first-child {
+    background: #CBD5E1 !important;
+    border-color: #94A3B8 !important;
+}
+
+div[data-testid="stCheckbox"] label:has(input:checked) svg {
+    color: #475569 !important;
+    fill: #475569 !important;
+}
 
 .st-key-active_alerts_card button[kind="secondary"] {
     background: #FFFFFF !important;
@@ -728,6 +768,96 @@ def show_statistics(df, column, suffix):
             )
 
 
+def calculate_rsi(series, period=14):
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+
+    average_gain = gain.ewm(
+        alpha=1 / period,
+        min_periods=period,
+        adjust=False,
+    ).mean()
+    average_loss = loss.ewm(
+        alpha=1 / period,
+        min_periods=period,
+        adjust=False,
+    ).mean()
+
+    relative_strength = average_gain / average_loss.replace(0, float("nan"))
+    rsi = 100 - (100 / (1 + relative_strength))
+
+    return rsi.fillna(50)
+
+
+def show_rsi_chart(df, column, line_color):
+    rsi_column = f"{column}_rsi"
+
+    rsi_figure = go.Figure()
+    rsi_figure.add_trace(
+        go.Scatter(
+            x=df["timestamp"],
+            y=df[rsi_column],
+            mode="lines",
+            name="RSI (14)",
+            line=dict(width=2.2, color=line_color),
+            hovertemplate=(
+                "RSI: %{y:.2f}<br>"
+                "%{x|%d.%m %H:%M}"
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    rsi_figure.add_hline(
+        y=70,
+        line_width=1.2,
+        line_dash="dash",
+        line_color="rgba(220,38,38,0.65)",
+        annotation_text="70",
+        annotation_position="top left",
+    )
+    rsi_figure.add_hline(
+        y=30,
+        line_width=1.2,
+        line_dash="dash",
+        line_color="rgba(5,150,105,0.65)",
+        annotation_text="30",
+        annotation_position="bottom left",
+    )
+
+    rsi_figure.update_layout(
+        height=210,
+        paper_bgcolor="rgba(255,255,255,0)",
+        plot_bgcolor="rgba(248,250,252,0.75)",
+        margin=dict(l=10, r=10, t=18, b=8),
+        hovermode="x unified",
+        showlegend=False,
+        xaxis=dict(
+            title="",
+            showgrid=False,
+            zeroline=False,
+            tickfont=dict(size=10, color="#64748B"),
+        ),
+        yaxis=dict(
+            title="",
+            range=[0, 100],
+            dtick=20,
+            showgrid=True,
+            gridcolor="#E2E8F0",
+            zeroline=False,
+            tickfont=dict(size=10, color="#64748B"),
+        ),
+        font=dict(family="Arial", color="#334155"),
+    )
+
+    st.plotly_chart(
+        rsi_figure,
+        width="stretch",
+        config={"displayModeBar": False, "scrollZoom": False},
+    )
+
+
 def show_market_chart(
     df,
     column,
@@ -735,19 +865,23 @@ def show_market_chart(
     suffix,
     line_color,
     precision=4,
+    chart_key=None,
 ):
-    analyzed_df = add_time_based_moving_averages(
-        df,
-        column,
-        short_minutes=30,
-        long_minutes=60,
-    )
+    chart_key = chart_key or column
 
-    short_ma_column = f"{column}_ma_short"
-    long_ma_column = f"{column}_ma_long"
+    source_df = df.sort_values("timestamp").copy()
+    source_df[f"{column}_ma20"] = source_df[column].rolling(
+        window=20,
+        min_periods=1,
+    ).mean()
+    source_df[f"{column}_ma50"] = source_df[column].rolling(
+        window=50,
+        min_periods=1,
+    ).mean()
+    source_df[f"{column}_rsi"] = calculate_rsi(source_df[column], period=14)
 
     trend = calculate_time_based_trend(
-        df,
+        source_df,
         column,
         short_minutes=30,
         long_minutes=60,
@@ -758,19 +892,16 @@ def show_market_chart(
         trend_icon = "↗"
         trend_color = "#059669"
         trend_bg = "#ECFDF5"
-
     elif trend == "Düşüş Eğilimi":
         trend_text = "DÜŞÜŞ"
         trend_icon = "↘"
         trend_color = "#DC2626"
         trend_bg = "#FEF2F2"
-
     elif trend == "Yetersiz Veri":
         trend_text = "VERİ BİRİKİYOR"
         trend_icon = "◌"
         trend_color = "#B45309"
         trend_bg = "#FFFBEB"
-
     else:
         trend_text = "YATAY"
         trend_icon = "→"
@@ -778,122 +909,154 @@ def show_market_chart(
         trend_bg = "#F1F5F9"
 
     chart_header = (
-        '<div style="'
-        'display:flex;'
-        'justify-content:space-between;'
-        'align-items:center;'
-        'margin-bottom:10px;'
-        '">'
+        '<div style="display:flex;justify-content:space-between;align-items:center;'
+        'margin-bottom:12px;gap:12px;">'
         '<div>'
-        '<div style="'
-        'font-size:21px;'
-        'font-weight:800;'
-        'color:#0F172A;'
-        '">'
+        '<div style="font-size:21px;font-weight:800;color:#0F172A;">'
         f'{title}'
         '</div>'
-        '<div style="'
-        'margin-top:4px;'
-        'font-size:14px;'
-        'color:#475569;'
-        '">'
-        'Fiyat hareketi ve zaman bazlı trend analizi'
+        '<div style="margin-top:4px;font-size:14px;color:#475569;">'
+        'Canlı fiyat hareketi ve teknik analiz'
         '</div>'
         '</div>'
         '<div style="'
-        f'color:{trend_color};'
-        f'background:{trend_bg};'
+        f'color:{trend_color};background:{trend_bg};'
         f'border:1px solid {trend_color}33;'
-        'padding:6px 10px;'
-        'border-radius:999px;'
-        'font-size:13px;'
-        'font-weight:800;'
-        'letter-spacing:.6px;'
-        '">'
+        'padding:6px 10px;border-radius:999px;font-size:13px;'
+        'font-weight:800;letter-spacing:.6px;white-space:nowrap;">'
         f'{trend_icon} {trend_text}'
         '</div>'
         '</div>'
     )
+    st.markdown(chart_header, unsafe_allow_html=True)
+
+    period_choice = st.radio(
+        "Dönem",
+        options=["24 Saat", "7 Gün", "30 Gün", "Tümü"],
+        index=0,
+        key=f"{chart_key}_period",
+        horizontal=True,
+        label_visibility="collapsed",
+    )
 
     st.markdown(
-        chart_header,
+        '<div style="margin-top:8px;margin-bottom:5px;color:#475569;'
+        'font-size:12px;font-weight:850;letter-spacing:.6px;">'
+        'İNDİKATÖRLER'        '</div>',
         unsafe_allow_html=True,
     )
 
-    fig = px.line(
-        analyzed_df,
-        x="timestamp",
-        y=column,
-    )
+    indicator_columns = st.columns(3, gap="small")
 
-    fig.update_traces(
-        mode="lines",
-        line=dict(
-            width=2.8,
-            color=line_color,
-        ),
-        name="Fiyat",
-        hovertemplate=(
-            "<b>%{y}</b><br>"
-            "%{x|%d.%m %H:%M}"
-            "<extra></extra>"
-        ),
-    )
-
-    fig.add_scatter(
-        x=analyzed_df["timestamp"],
-        y=analyzed_df[short_ma_column],
-        mode="lines",
-        name="30 dk Ortalama",
-        line=dict(
-            width=1.8,
-            dash="dash",
-            color="rgba(148,163,184,0.85)",
-        ),
-        hovertemplate=(
-            "30 dk Ortalama: %{y}<br>"
-            "%{x|%d.%m %H:%M}"
-            "<extra></extra>"
-        ),
-    )
-
-    fig.add_scatter(
-        x=analyzed_df["timestamp"],
-        y=analyzed_df[long_ma_column],
-        mode="lines",
-        name="60 dk Ortalama",
-        line=dict(
-            width=1.8,
-            dash="dot",
-            color="rgba(99,102,241,0.85)",
-        ),
-        hovertemplate=(
-            "60 dk Ortalama: %{y}<br>"
-            "%{x|%d.%m %H:%M}"
-            "<extra></extra>"
-        ),
-    )
-
-    if not analyzed_df.empty:
-        latest_value = analyzed_df[column].iloc[-1]
-
-        fig.add_annotation(
-            x=analyzed_df["timestamp"].iloc[-1],
-            y=latest_value,
-            text=f"{latest_value:.{precision}f}",
-            showarrow=True,
-            arrowhead=0,
-            ax=-30,
-            ay=-35,
-            font=dict(
-                size=12,
-                color="#FFFFFF",
-            ),
-            bgcolor=line_color,
-            bordercolor="rgba(255,255,255,0.12)",
-            borderwidth=1,
-            borderpad=5,
+    with indicator_columns[0]:
+        show_ma20 = st.checkbox(
+            "MA20",
+            key=f"{chart_key}_show_ma20",
         )
+
+    with indicator_columns[1]:
+        show_ma50 = st.checkbox(
+            "MA50",
+            key=f"{chart_key}_show_ma50",
+        )
+
+    with indicator_columns[2]:
+        show_rsi = st.checkbox(
+            "RSI",
+            key=f"{chart_key}_show_rsi",
+        )
+
+    filtered_df = source_df.copy()
+    latest_timestamp = filtered_df["timestamp"].max()
+
+    if period_choice == "24 Saat":
+        filtered_df = filtered_df[
+            filtered_df["timestamp"] >= latest_timestamp - timedelta(hours=24)
+        ]
+    elif period_choice == "7 Gün":
+        filtered_df = filtered_df[
+            filtered_df["timestamp"] >= latest_timestamp - timedelta(days=7)
+        ]
+    elif period_choice == "30 Gün":
+        filtered_df = filtered_df[
+            filtered_df["timestamp"] >= latest_timestamp - timedelta(days=30)
+        ]
+
+    if filtered_df.empty:
+        st.info("Seçilen zaman aralığında veri bulunmuyor.")
+        return
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=filtered_df["timestamp"],
+            y=filtered_df[column],
+            mode="lines",
+            name="Fiyat",
+            line=dict(width=2.8, color=line_color),
+            hovertemplate=(
+                "<b>%{y}</b><br>"
+                "%{x|%d.%m %H:%M}"
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    if show_ma20:
+        fig.add_trace(
+            go.Scatter(
+                x=filtered_df["timestamp"],
+                y=filtered_df[f"{column}_ma20"],
+                mode="lines",
+                name="MA20",
+                line=dict(
+                    width=1.8,
+                    dash="dash",
+                    color="rgba(14,165,233,0.9)",
+                ),
+                hovertemplate=(
+                    "MA20: %{y}<br>"
+                    "%{x|%d.%m %H:%M}"
+                    "<extra></extra>"
+                ),
+            )
+        )
+
+    if show_ma50:
+        fig.add_trace(
+            go.Scatter(
+                x=filtered_df["timestamp"],
+                y=filtered_df[f"{column}_ma50"],
+                mode="lines",
+                name="MA50",
+                line=dict(
+                    width=1.8,
+                    dash="dot",
+                    color="rgba(124,58,237,0.9)",
+                ),
+                hovertemplate=(
+                    "MA50: %{y}<br>"
+                    "%{x|%d.%m %H:%M}"
+                    "<extra></extra>"
+                ),
+            )
+        )
+
+    latest_value = filtered_df[column].iloc[-1]
+    fig.add_annotation(
+        x=filtered_df["timestamp"].iloc[-1],
+        y=latest_value,
+        text=f"{latest_value:.{precision}f}",
+        showarrow=True,
+        arrowhead=0,
+        ax=-30,
+        ay=-35,
+        font=dict(size=12, color="#FFFFFF"),
+        bgcolor=line_color,
+        bordercolor="rgba(255,255,255,0.12)",
+        borderwidth=1,
+        borderpad=5,
+    )
 
     chart_backgrounds = {
         "gold_gram": "#FFFDF6",
@@ -905,75 +1068,52 @@ def show_market_chart(
 
     fig.update_layout(
         height=320,
-
         paper_bgcolor="rgba(255,255,255,0)",
         plot_bgcolor=chart_backgrounds.get(column, "#FFFFFF"),
-
-        margin=dict(
-            l=10,
-            r=10,
-            t=28,
-            b=10,
-        ),
-
+        margin=dict(l=10, r=10, t=28, b=10),
         hovermode="x unified",
-
         legend=dict(
             orientation="h",
             yanchor="bottom",
             y=1.01,
             xanchor="left",
             x=0,
-            font=dict(
-                size=10,
-                color="#475569",
-            ),
+            font=dict(size=10, color="#475569"),
             bgcolor="rgba(0,0,0,0)",
         ),
-
         xaxis=dict(
             title="",
             showgrid=False,
             zeroline=False,
             showline=False,
-            tickfont=dict(
-                size=10,
-                color="#64748B",
-            ),
+            tickfont=dict(size=10, color="#64748B"),
         ),
-
         yaxis=dict(
             title="",
             showgrid=True,
             gridcolor="#E2E8F0",
             zeroline=False,
             showline=False,
-            tickfont=dict(
-                size=10,
-                color="#64748B",
-            ),
+            tickfont=dict(size=10, color="#64748B"),
         ),
-
-        font=dict(
-            family="Arial",
-            color="#334155",
-        ),
+        font=dict(family="Arial", color="#334155"),
     )
 
     st.plotly_chart(
         fig,
         width="stretch",
-        config={
-            "displayModeBar": False,
-            "scrollZoom": False,
-        },
+        config={"displayModeBar": False, "scrollZoom": False},
     )
 
-    show_statistics(
-        df,
-        column,
-        suffix,
-    )
+    if show_rsi:
+        st.markdown(
+            '<div style="margin-top:4px;color:#475569;font-size:12px;'
+            'font-weight:850;letter-spacing:.6px;">RSI (14)</div>',
+            unsafe_allow_html=True,
+        )
+        show_rsi_chart(filtered_df, column, line_color)
+
+    show_statistics(filtered_df, column, suffix)
 
 def database_info_card(label, value):
 
@@ -1809,12 +1949,13 @@ else:
         with chart_column:
             with st.container(border=True):
                 show_market_chart(
-                    df=df,
+                    df=df_all,
                     column=chart_config["column"],
                     title=chart_config["title"],
                     suffix=chart_config["suffix"],
                     line_color=chart_config["line_color"],
                     precision=chart_config["precision"],
+                    chart_key=chart_config["column"],
                 )
 
 
@@ -1866,12 +2007,13 @@ fx_charts = [
 for index, chart in enumerate(fx_charts):
     with st.container(border=True):
         show_market_chart(
-            df=df,
+            df=df_all,
             column=chart["column"],
             title=chart["title"],
             suffix=chart["suffix"],
             line_color=chart["line_color"],
             precision=chart["precision"],
+            chart_key=chart["column"],
         )
 
     if index < len(fx_charts) - 1:
